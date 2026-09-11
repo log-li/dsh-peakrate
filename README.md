@@ -84,7 +84,7 @@ Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a 
 
 **Hover the badge** for the full picture — which model, which state, the peak/off-peak spread,
 when it switches and to what, and which profile it matched. The card is drawn by the plugin
-itself (not an OS tooltip), so it follows the theme and reads the same in light and dark:
+itself (not an OS tooltip), so it follows the theme and is reachable by keyboard focus too:
 
 <img src="docs/hover-card.png" width="380" alt="Hover detail card" />
 
