@@ -126,7 +126,7 @@ Judgement is made against a curated catalog, so a provider is either **mapped** 
 **Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a
 silent misconfiguration**, and **refresh the catalog**.
 
-<img src="docs/coverage-card.png" width="560" alt="Coverage panel under Settings → Plugins" />
+<img src="docs/coverage-card.png" width="760" alt="Coverage panel under Settings → Plugins" />
 
 
 | Column | Meaning |

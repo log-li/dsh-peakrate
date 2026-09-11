@@ -126,7 +126,7 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 **设置 → 插件 → 插件配置**。它承担三件事：**看清覆盖**、**发现漏配**、**刷新目录**。
 
-<img src="docs/coverage-card.png" width="560" alt="设置 → 插件 里的覆盖面板" />
+<img src="docs/coverage-card.png" width="760" alt="设置 → 插件 里的覆盖面板" />
 
 
 | 列 | 含义 |
