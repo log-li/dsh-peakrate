@@ -82,9 +82,9 @@ Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a 
 
 <img src="docs/chip.png" width="560" alt="Rate badge in the composer tool row" />
 
-**Hover the badge** for the full picture — which model, which state, the peak/off-peak spread,
-when it switches and to what, and which profile it matched. The card is drawn by the plugin
-itself (not an OS tooltip), so it follows the theme and is reachable by keyboard focus too:
+**Hover the badge** for the detail: the state now, and what it becomes and when. The card is drawn
+by the plugin itself (not an OS tooltip), so it follows the theme and is reachable by keyboard
+focus too:
 
 <img src="docs/hover-card.png" width="720" alt="Hover detail card" />
 

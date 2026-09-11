@@ -83,9 +83,8 @@ dsh plugin add ./path/to/dsh-peakrate
 
 <img src="docs/chip.png" width="560" alt="composer 工具行里的倍率徽章" />
 
-**悬停徽章**看全貌 —— 哪个模型、处于哪一态、峰谷对照、何时切换以及切到什么、命中了哪个 profile。
-浮层由插件**自己绘制**（不是系统 tooltip），因此跟随明暗主题、深浅色下观感一致，
-而且**键盘 Tab 聚焦也能唤出**：
+**悬停徽章**看详情：此刻什么态、多久之后变成什么。浮层由插件**自己绘制**（非系统 tooltip），
+跟随明暗主题，键盘聚焦同样能唤出：
 
 <img src="docs/hover-card.png" width="720" alt="悬停详情浮层" />
 

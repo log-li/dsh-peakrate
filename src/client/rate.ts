@@ -101,31 +101,24 @@ export function detailLines(
   subject?: string,
 ): string[] {
   const { profile, period, badge } = state
-  const currentName = periodName(profile, period)
-  // 主语：hover 的是**当前这个模型**，第一行就该是它的名字。
-  // 没有主语时（菜单行已在 title 里带了模型名）退回 profile 覆盖范围。
   const scope = `${profile.providerName} · ${profile.modelLabel}`
-  const lines = [
-    subject ?? scope,
-    t('detail.current', { name: currentName, badge }),
-  ]
-  if (period === 'campaign' && profile.campaignDetail !== undefined) {
-    lines.push(profile.campaignDetail)
-  }
-  lines.push(t('detail.range', { peak: profile.peakBadge, offPeak: profile.offPeakBadge }))
+  const lines = [subject ?? scope]
+
+  // 只讲**当前这个模型**：此刻什么态、什么倍率，以及多久之后变成什么。
+  // 刻意不列：profile 的覆盖模型族（那是别的模型，对使用者没用）、
+  // 峰谷对照表（与「此刻 + 下一刻」重复）、数据核验日期（属覆盖面板的职责）。
   const countdown = formatCountdown(state.minutesUntilSwitch)
-  if (countdown !== '') {
-    lines.push(
-      state.nextBadge === undefined
-        ? t('detail.switch', { countdown })
-        : t('detail.switchTo', { countdown, badge: state.nextBadge }),
-    )
+  const now = `${periodName(profile, period)} ${badge}`
+  if (countdown === '' || state.nextPeriod === undefined) {
+    lines.push(now)
+    return lines
   }
-  // profile 覆盖范围：当主语是具体模型时，它降为**次要说明**（同一个 profile 常覆盖
-  // 多个共用时段规则的模型，如「V4.1 Flash + V4 Pro 0813」）。
-  if (subject !== undefined) lines.push(scope)
-  if (profile.verifiedAt !== undefined) {
-    lines.push(t('detail.verified', { date: profile.verifiedAt }))
-  }
+  lines.push(
+    t('detail.now', { now }),
+    t('detail.next', {
+      countdown,
+      next: `${periodName(profile, state.nextPeriod)} ${state.nextBadge ?? ''}`.trim(),
+    }),
+  )
   return lines
 }
