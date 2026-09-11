@@ -159,6 +159,18 @@ dsh-peakrate/
   schema 用 `@deepseek-ai/schemastery`（共享包 → peerDependency）。
   收益不止「卡片能渲染」：**插件的配置项由此变成界面可编辑**。
 
+- **★ `settings.installSection` 的钩子契约：`setSource` 只交接一次，`onChange` 才是变更信号**
+  （2026-09-12 用**写文件探针**实测）。契约是「**存读取器 + 按需再拉**」：
+  - `setSource(reader)` **只在安装时调用一次**，把「读当前用户设置」的函数交给你；
+  - 用户之后每次编辑**只触发 `onChange`**，**不会**再调 `setSource`；
+  - 因此**不能在 `setSource` 里一次性取值就完事**，必须在 `onChange`（或每个使用点）
+    调 `reader()` 重新拉取。官方两个使用方（`dsh-agent-loop` / `dsh-tool-subagent`）
+    都是 `setSource: (s) => { source = s }` + 用时读 `source()`。
+  - 反例：本插件曾写 `setSource: (s) => applySettings(s())` + `onChange: () => {}`
+    → 用户编辑**永远到不了运行中的实例**（静默失效，UI 看着正常）。
+  - 探针方法（可靠且可复用）：在回调里 `fs.appendFileSync('/tmp/probe.log', …)`，
+    重启实例后改一次 `settings.yaml`，读文件即可看出哪个回调被触发。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：
