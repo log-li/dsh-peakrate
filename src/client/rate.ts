@@ -63,11 +63,6 @@ export function periodBadge(profile: RateProfile, period: Period): string {
   return period === 'peak' ? profile.peakBadge : profile.offPeakBadge
 }
 
-/** 取某时段态的展示名。 */
-export function periodName(profile: RateProfile, period: Period): string {
-  if (period === 'campaign') return profile.campaignName ?? 'Campaign'
-  return period === 'peak' ? profile.peakName : profile.offPeakName
-}
 
 /**
  * 构建悬停详情：当前时段名 + 倍率对照 + 倒计时 + 核验日期。
@@ -108,7 +103,9 @@ export function detailLines(
   // 刻意不列：profile 的覆盖模型族（那是别的模型，对使用者没用）、
   // 峰谷对照表（与「此刻 + 下一刻」重复）、数据核验日期（属覆盖面板的职责）。
   const countdown = formatCountdown(state.minutesUntilSwitch)
-  const now = `${periodName(profile, period)} ${badge}`
+  // 时段名走**字典**，不用数据源的英文 `peakName`/`offPeakName` ——
+  // 否则中文界面里会冒出 `Off-peak rate`。
+  const now = `${t(`period.${period}`)} ${badge}`
   if (countdown === '' || state.nextPeriod === undefined) {
     lines.push(now)
     return lines
@@ -117,7 +114,7 @@ export function detailLines(
     t('detail.now', { now }),
     t('detail.next', {
       countdown,
-      next: `${periodName(profile, state.nextPeriod)} ${state.nextBadge ?? ''}`.trim(),
+      next: `${t(`period.${state.nextPeriod}`)} ${state.nextBadge ?? ''}`.trim(),
     }),
   )
   return lines

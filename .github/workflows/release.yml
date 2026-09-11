@@ -45,10 +45,10 @@ jobs:
           echo "publishing dsh-peakrate $(node -p 'require("./package.json").version')"
 
       - name: Publish to npm (trusted publishing / OIDC; provenance signs the tarball)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        # OIDC: trusts the npm Trusted Publisher configured for log-li/dsh-peakrate.
-        # NODE_AUTH_TOKEN is a fallback for token-based publishing.
+        # ⚠ 这里**不能**设 `NODE_AUTH_TOKEN`（哪怕是 `${{ secrets.NPM_TOKEN }}`）：
+        # 该 secret 不存在时它是**空字符串**，而 npm 见到这个变量存在就改用 token 认证，
+        # **直接绕过 OIDC** → `npm error code ENEEDAUTH / need auth`（2026-09-12 实际踩到，
+        # v0.2.0 首次发布因此失败）。可信发布只靠 `id-token: write` 自动完成，无需任何 env。
         #
         # Idempotent on purpose: the very first release of a package has to be
         # published before its Trusted Publisher can be configured, and re-running
