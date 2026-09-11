@@ -33,8 +33,10 @@ DSH 生态里的「峰谷/时段」类插件（`dsh-peak-indicator`、`dsh-peak-
 **唯一数据源**：`https://offpeakclock.com/pricing.json`（DeepSeek Peak-Hour Clock）
 
 - 结构：`{ schemaVersion: 1, updatedAt, defaultProfile, profiles: [...] }`
-- 实测（2026-09-06 版）：12 个 profile，覆盖 8 家 provider
-  （DeepSeek / Ollama / B.AI / Z.ai / Alibaba Cloud / Xiaomi MiMo / Qoder / Tencent Cloud）
+- 实测（2026-09-11 版）：**14 个 profile**，覆盖 8 家 provider
+  （DeepSeek / Ollama / B.AI / Z.ai / Alibaba Cloud / Xiaomi MiMo / Qoder / Tencent Cloud / Swarms）
+  > 2026-09-06 版为 12 个 profile；数据源随供应商调价持续增删，**数量不是契约**，
+  > 插件按 profile id 匹配，不依赖总数。
 - 每个 profile 携带：`id`、`provider`、`model`、`product`、`schedule`
   （`timeZone` / `peakDays` / `peakWindows` / `offDayName`）、
   `periods`（`peak` / `offPeak`，各含 `badge` 倍率字符串与 `name`）、
