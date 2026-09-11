@@ -80,6 +80,19 @@ dsh-peakrate/
   - **守卫测试**：`test/bundle-contract.test.ts` 维护 `SHADOWING_SLOTS` 清单并断言
     绝不注册其中任何一个。**改 slot 必跑它**。
 
+- **★ client 插件的 `inject` 必须含 `remote.session`**（2026-09-12 实测）：
+  `modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，依赖
+  `remote.session`。缺了它会在**浏览器运行时**抛
+  `cannot get property "remote.session" without inject`——服务端产物、类型检查、
+  单测**全部正常**，只有真实浏览器能暴露。
+  官方 `dsh-client-ui-model-selection` 的 inject 为
+  `["commandUi","locale","sessions","slots","remote","remote.session"]`。
+  **新增消费服务时，先对照官方同类插件的 inject 清单，不要凭需要猜。**
+
+- **取服务用属性访问，不要用 `ctx.get()`**：cordis 的服务代理只在**属性访问**
+  （`scope.slots`）时把 `this.ctx` 绑定到调用方上下文；`get()` 拿到未绑定实例，
+  其内部依赖解析不到。用 `scope.get('modelDirectories')` 实测会触发上面的报错。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：
@@ -110,6 +123,34 @@ dsh-peakrate/
 - **绝不注册到 `SHADOWING_SLOTS` 中的任何槽位**（含 `conversation.input.model`）
 - 注册到 `conversation.input.left`，且**同时**传 `name`（槽位键）与 `id`（自有 cell 键）
 - 注入面能给出非空 profiles，端到端能算出正确判定
+
+### ★ 隔离实例实机验证（client 插件发布前的**标准动作**）
+
+**不要拿用户正在用的实例试错。** 用独立 profile + 独立端口 + 无头浏览器验证：
+
+```bash
+# 1) 从出厂模板新建独立 profile（不碰用户的 profile）
+dsh --profile peakrate-test --from-default-profile web --dump-config > /dev/null
+
+# 2) 给它独立的 node_modules（逐项软链复用原 profile 的包，原 profile 零改动）
+TEST=~/.dsh/profiles/peakrate-test; WEB=~/.dsh/profiles/web
+mkdir -p "$TEST/node_modules"
+for e in "$WEB"/node_modules/* "$WEB"/node_modules/.[!.]*; do
+  [ -e "$e" ] || continue; b=$(basename "$e"); [ "$b" = dsh-peakrate ] || ln -sfn "$e" "$TEST/node_modules/$b"
+done
+ln -sfn /Users/logan/Projects/dsh-peakrate "$TEST/node_modules/dsh-peakrate"
+
+# 3) 注册插件并启动到**另一个端口**
+#    （package.json 的 dependencies + dsh.profile.bundles 各加一条）
+dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
+
+# 4) Playwright 无头截图 + 交互（Chromium 在 ~/Library/Caches/ms-playwright）
+#    关键断言：徽章渲染 + 自带选择器可用 + **控制台错误为 0**
+```
+
+**必查三项**：① 控制台/pageerror **为 0**；② 自带 UI 仍可用（真的去点它）；
+③ 徽章渲染且数值正确。**「服务端下发了产物」≠「运行时无错」** —— 本次
+`remote.session` 缺陷正是服务端一切正常、浏览器才报错。
 
 **实机验收**（装进 web profile 后开新会话）——见 spec §10：
 
