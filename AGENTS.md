@@ -45,8 +45,10 @@ dsh-peakrate/
 │   ├── schedule.ts       # 纯函数：currentPeriod / minutesUntilSwitch（可单测）
 │   ├── matching.ts       # 纯函数：provider 别名 + 模型归一化 → profile（可单测）
 │   ├── coverage.ts       # 纯函数：覆盖率计算（设置页与审计共用）
+│   ├── catalog-route.ts  # 带信任围栏的 /peakrate/catalog 路由
 │   └── client/
 │       ├── index.tsx     # 注册三处 + locale 文案
+│       ├── live.ts       # 运行时目录拉取 + 内置快照回退
 │       ├── ModelSelect.tsx    # fork 官方选择器（功能超集）+ 每行倍率徽章
 │       ├── SettingsSection.tsx # 「设置→插件」里的可展开配置卡片
 │       ├── rate.ts       # 倍率判定共享层
@@ -171,6 +173,15 @@ dsh-peakrate/
   - 探针方法（可靠且可复用）：在回调里 `fs.appendFileSync('/tmp/probe.log', …)`，
     重启实例后改一次 `settings.yaml`，读文件即可看出哪个回调被触发。
 
+- **★ 请求处理路径上访问未 inject 的服务 → 抛错 → webserver 兜底成 HTTP 400**
+  （2026-09-12 实测）：`ctx.webRuntime` 这类属性访问在未声明 inject 时抛
+  `cannot get property "webRuntime" without inject`；而**路由 handler 抛出的异常会被
+  dsh-host-webserver 兜成 `writeHead(400)`** —— 症状是「路由匹配上了（未知路径 404、
+  本路由 400）却全 400」，且**日志里什么都看不到**（插件 logger 不进 stdout）。
+  排查法：`curl -i` 看是谁返回的；对照一个不存在的路径拿到 404 即可确认路由已匹配。
+  修法：用 `ctx.get('x')` 或把整段包 try/catch —— **围栏类代码宁可退化成保守行为，
+  也不能让路由 400/500**。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：
@@ -220,7 +231,7 @@ mkdir -p "$TEST/node_modules"
 for e in "$WEB"/node_modules/* "$WEB"/node_modules/.[!.]*; do
   [ -e "$e" ] || continue; b=$(basename "$e"); [ "$b" = dsh-peakrate ] || ln -sfn "$e" "$TEST/node_modules/$b"
 done
-ln -sfn /Users/logan/Projects/dsh-peakrate "$TEST/node_modules/dsh-peakrate"
+ln -sfn "$(pwd)" "$TEST/node_modules/dsh-peakrate"   # 在插件仓库根目录执行
 
 # 3) 注册插件并启动到**另一个端口**
 #    （package.json 的 dependencies + dsh.profile.bundles 各加一条）

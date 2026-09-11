@@ -59,7 +59,8 @@ export interface MatchConfig {
  * 内置 provider 别名：DSH 的 provider id → 数据源里的 provider 展示名。
  *
  * 数据源里只覆盖 8 家 provider；本机配置中的 openrouter / ocg / opencode-go /
- * ocg-1 / ocg-1-chat 在数据源中没有对应 provider，因此其模型一律不显示。
+ * 转售/网关类 provider（如 OpenCode Go）**继承上游时段**，故显式映射到上游 profile；
+ * 仅当某 provider 确实没有时段计价时才不映射，且必须写明理由（见 UNMATCHED_BY_DESIGN）。
  */
 export const DEFAULT_PROVIDER_ALIASES: Record<string, string> = {
   'deepseek-official': 'DeepSeek',

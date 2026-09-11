@@ -32,12 +32,20 @@ import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
 
-/** 优先从全局安装解析 Playwright，其次从本地。 */
+/**
+ * 解析 Playwright：先试本地，再试全局安装前缀。
+ *
+ * 不硬编码任何机器路径 —— 全局包位置用 `npm root -g` 自己问出来。
+ */
 function loadPlaywright() {
-  const candidates = [
-    '/Users/logan/.npm-global/lib/node_modules/playwright',
-    'playwright',
-  ]
+  const candidates = ['playwright']
+  try {
+    const { execSync } = require('node:child_process')
+    const globalRoot = execSync('npm root -g', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    if (globalRoot !== '') candidates.push(`${globalRoot}/playwright`)
+  } catch {
+    /* 拿不到全局根目录就只试本地 */
+  }
   for (const id of candidates) {
     try {
       return require(id)
@@ -45,7 +53,7 @@ function loadPlaywright() {
       /* 继续尝试下一个 */
     }
   }
-  throw new Error('未找到 Playwright。请先 `npm i -g playwright` 或 `npx playwright install`。')
+  throw new Error('未找到 Playwright。请先 `npm i -g playwright` 或 `npm i -D playwright`。')
 }
 
 const url = process.argv[2]
