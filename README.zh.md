@@ -87,7 +87,7 @@ dsh plugin add ./path/to/dsh-peakrate
 浮层由插件**自己绘制**（不是系统 tooltip），因此跟随明暗主题、深浅色下观感一致，
 而且**键盘 Tab 聚焦也能唤出**：
 
-<img src="docs/hover-card.png" width="380" alt="悬停详情浮层" />
+<img src="docs/hover-card.png" width="720" alt="悬停详情浮层" />
 
 ### 三种时段态
 
