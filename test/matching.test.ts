@@ -4,6 +4,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MODEL_MAPPINGS,
+  DEFAULT_PROVIDER_ALIASES,
+  UNMATCHED_BY_DESIGN,
   matchProfile,
   normalizeModelId,
   type RateProfile,
@@ -161,5 +163,46 @@ describe('内置映射表自洽性', () => {
     expect(ids).toContain('deepseek-v4')
     expect(ids).toContain('ollama-deepseek-v4')
     expect(ids).toContain('xiaomi-mimo-v2-5-token-plan')
+  })
+})
+
+describe('★ 防静默遗漏：每个已知 provider 要么有映射、要么写明理由', () => {
+  it('UNMATCHED_BY_DESIGN 的每条理由都必须非空且够具体', () => {
+    const entries = Object.entries(UNMATCHED_BY_DESIGN)
+    expect(entries.length).toBeGreaterThan(0)
+    for (const [provider, reason] of entries) {
+      expect(reason.length, `${provider} 的理由过短，等于没写`).toBeGreaterThan(20)
+    }
+  })
+
+  it('同一 provider 不得既在别名表又在「不映射」清单里（互相矛盾）', () => {
+    for (const provider of Object.keys(UNMATCHED_BY_DESIGN)) {
+      expect(
+        DEFAULT_PROVIDER_ALIASES[provider],
+        `${provider} 同时出现在别名表与 UNMATCHED_BY_DESIGN`,
+      ).toBeUndefined()
+    }
+  })
+
+  it('登记在「不映射」清单里的 provider 确实匹配不到任何 profile', () => {
+    const profiles = [
+      profile('deepseek-v4', 'DeepSeek'),
+      profile('ollama-deepseek-v4', 'Ollama'),
+    ]
+    for (const provider of Object.keys(UNMATCHED_BY_DESIGN)) {
+      for (const model of ['deepseek-v4-flash', 'omen-alpha', 'glm-5.3']) {
+        expect(matchProfile(provider, model, profiles), `${provider}/${model}`).toBeUndefined()
+      }
+    }
+  })
+
+  it('★ 回归：OpenCode Go 系必须有映射（2026-09-12 曾静默遗漏）', () => {
+    // 依据：https://opencode.ai/docs/go/ —— 其 DeepSeek V4 系峰值窗口与官方一致
+    for (const provider of ['ocg', 'ocg-1', 'opencode-go']) {
+      expect(
+        DEFAULT_PROVIDER_ALIASES[provider],
+        `${provider} 曾漏配；若将来取消映射，请移入 UNMATCHED_BY_DESIGN 并写明理由`,
+      ).toBeDefined()
+    }
   })
 })

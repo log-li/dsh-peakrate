@@ -81,3 +81,93 @@
 .dsh-peakrate-chip-countdown {
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* ============ 3) 设置页「模型峰谷倍率」 ============ */
+
+.dsh-peakrate-settings {
+  padding: 4px 2px 24px;
+}
+
+.dsh-peakrate-settings-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsh-peakrate-settings-desc,
+.dsh-peakrate-settings-muted {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.dsh-peakrate-settings-desc {
+  margin: 0 0 14px;
+}
+
+.dsh-peakrate-settings-h {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* 「完全没有命中」的告警条 */
+.dsh-peakrate-settings-alert {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+  color: var(--dsw-alias-state-error-primary);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  margin-bottom: 8px;
+}
+
+.dsh-peakrate-settings-alert ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.dsh-peakrate-settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsh-peakrate-settings-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--dsw-alias-label-tertiary);
+  padding: 4px 8px 6px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.dsh-peakrate-settings-table td {
+  padding: 5px 8px 5px 0;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+/* 有意不映射的 provider 行：弱化显示 */
+.dsh-peakrate-settings-skip td {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+.dsh-peakrate-settings-none {
+  color: var(--dsw-alias-label-dimmed);
+  font-size: 12px;
+}
+
+.dsh-peakrate-settings-code {
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  overflow-x: auto;
+  margin: 0;
+}

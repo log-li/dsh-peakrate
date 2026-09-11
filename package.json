@@ -58,7 +58,8 @@
     "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "audit": "node scripts/audit-coverage.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*"

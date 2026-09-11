@@ -39,10 +39,13 @@ dsh-peakrate/
 │   ├── index.ts          # host：配置、拉取/缓存、对外提供 profile 数据
 │   ├── schedule.ts       # 纯函数：currentPeriod / minutesUntilSwitch（可单测）
 │   ├── matching.ts       # 纯函数：provider 别名 + 模型归一化 → profile（可单测）
+│   ├── coverage.ts       # 纯函数：覆盖率计算（设置页与审计共用）
 │   └── client/
-│       ├── index.tsx     # 注册两处呈现 + locale 文案
-│       ├── ModelSelect.tsx  # fork 官方选择器（功能超集）+ 每行倍率徽章
-│       ├── rate.ts       # 倍率判定共享层（两处呈现共用）
+│       ├── index.tsx     # 注册三处 + locale 文案
+│       ├── ModelSelect.tsx    # fork 官方选择器（功能超集）+ 每行倍率徽章
+│       ├── SettingsSection.tsx # 设置页：实时覆盖表 + 规则说明
+│       ├── rate.ts       # 倍率判定共享层
+│       ├── icons.tsx     # DSH 风格单色描边 SVG 图标
 │       └── style.css     # 仅用 --dsw-* 设计 token
 └── test/                 # 纯函数单测 + 匹配表快照测试
 ```
@@ -132,6 +135,16 @@ dsh-peakrate/
   ```
   **契约测试与 DOM 断言都发现不了**——只有真实浏览器量 `getComputedStyle` 才暴露。
 
+- **★ 防静默遗漏：新 provider 必须有明确归属**（2026-09-12 教训）：
+  匹配的默认行为是「匹配不到就什么都不显示」——**缺少决策会被当成决策就是不做**。
+  因此每个已知 provider 必须**要么在 `DEFAULT_PROVIDER_ALIASES` 有映射、
+  要么在 `UNMATCHED_BY_DESIGN` 写明理由**（守卫测试强制）。
+  - **判断依据是上游是否有峰谷定价，不是数据源是否收录**：转售方（如 OpenCode Go
+    转售 DeepSeek）**继承上游规则**，而数据源只收录直连厂商。
+  - 新增 provider 时：先查其文档/定价页 → 有峰谷则加映射（附依据链接进 spec §4.3），
+    无则进 `UNMATCHED_BY_DESIGN` 写理由。
+  - 交付前跑「覆盖穷举」审计（见下方验证节）。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：
@@ -204,12 +217,28 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 > （官方同样如此）——属该环境的限制，**不能据此判断切换成功**。
 > 真实切换需在用户 profile 由人确认。
 
+### ★ 交付前「覆盖穷举」审计（2026-09-12 教训，必做）
+
+**背景**：ocg/opencode-go 曾因「数据源没收录」被静默漏掉 —— 把「数据源覆盖率」
+误当成「上游是否有峰谷定价」。防范机制见 spec §4.4。
+
+**做法**（每次装机前）：
+1. 打开 **设置 → 模型峰谷倍率**，通读「当前覆盖情况」表；
+2. 若顶部出现 **⚠ N 个 provider 完全没有命中** 告警 → **逐个确认**：
+   - 「确实没有峰谷定价」→ 在 `src/matching.ts` 的 `UNMATCHED_BY_DESIGN` 写明理由；
+   - 「endpoint 未被识别 / 漏配」→ 补 `DEFAULT_PROVIDER_ALIASES` + 映射 + 回归测试。
+3. 确认每一条排除都有依据（**附链接**），并把结论同步进 spec §4.3。
+
+**⚠ 判据是「整组零命中」，不是「有未命中」** —— 同一 provider 下混有非峰谷计价的
+模型（如 ollama 下的 GLM/Kimi）是正常的，全部提示等于没提示。
+
 **实机验收**（装进 web profile 后开新会话）——见 spec §10：
 
 1. **确认模型选择器可用**：能打开、能切换模型、切换后触发器更新
 2. 菜单内每行显示倍率；未匹配的模型（如 kimi-k3）**什么都不显示**
 3. composer 工具行的当前模型徽章仍在（与菜单呈现互补）
 4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
+5. **设置 → 模型峰谷倍率** 页面正常渲染，且**无 ⚠ 告警**
 
 ## 提交门禁
 

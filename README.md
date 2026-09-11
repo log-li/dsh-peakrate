@@ -43,6 +43,24 @@ Ollama
 
 倒计时格式：`<1h` 用 `Xm`；`<24h` 用 `Xh Ym`；`≥24h` 用 `Xd Yh`。
 
+## 设置页：模型峰谷倍率
+
+**设置 → 模型峰谷倍率** 显示：
+
+- **当前覆盖情况**（实时）：逐 provider 列出模型、当前倍率、命中哪个 profile；
+  未收录的明确标「未收录」；
+- **⚠ 告警**：某个 provider **整组都没有命中**时会高亮 —— 这通常意味着漏配
+  （同一 provider 下混有非峰谷计价的模型属正常，不会告警）；
+- **匹配规则**：内置 provider 映射表 + 有意不映射的 provider 及理由；
+- **如何自定义**：`providerAliases` / `modelMappings` 的配置示例。
+
+已在覆盖内的 provider：`deepseek-official`、`ollama`、`xiaomi-token-plan-cn`、
+`ocg` / `ocg-1` / `opencode-go`（OpenCode Go 与 DeepSeek 官方窗口一致）、
+`bai`、`zai`、`qoder`、`tencent-cloud`、`alibaba-cloud`、`swarms`。
+
+已知**有意不映射**：`openrouter`（聚合网关，provider 级规则不成立）、
+`ocg-1-chat`（仅 omen-alpha 等非峰谷计价模型）。
+
 ### 关于「替换模型选择器」
 
 菜单内逐行倍率**必须**接管官方选择器（`conversation.input.model`，single +

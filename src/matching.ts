@@ -93,6 +93,27 @@ export const DEFAULT_MODEL_MAPPINGS: ModelMapping[] = [
 ]
 
 /**
+ * **已知但有意不映射**的 provider —— 每一项都必须写明理由与依据。
+ *
+ * 这份清单的作用是**防静默遗漏**（2026-09-12 教训）：
+ * 本插件曾把 `ocg` / `opencode-go` 归入「数据源没有 → 不显示」，
+ * 但真实原因是「**我没查这个 endpoint 有没有峰谷定价**」——
+ * 把「数据源覆盖率」误当成「上游是否有峰谷定价」。而 OpenCode Go 是
+ * DeepSeek 的**转售方**，其文档载明峰值窗口与官方完全一致。
+ *
+ * 因此现在的纪律是：**每个已知 provider 要么有映射，要么在这里留一条理由**。
+ * 守卫测试 `test/matching.test.ts` 会断言此清单的条目齐备且理由非空，
+ * 新增映射时忘了同步就会失败。
+ */
+export const UNMATCHED_BY_DESIGN: Record<string, string> = {
+  'ocg-1-chat':
+    '仅提供 omen-alpha 等非峰谷计价模型（OpenCode Go 的 chat 通道），无对应 profile。',
+  'openrouter':
+    '聚合网关，同一 baseURL 服务数十家厂商，「provider 级」时段规则不成立；' +
+    '需按具体模型判定，暂不映射（如将来数据源收录其转售价目再议）。',
+}
+
+/**
  * 归一化模型 id：去掉 provider 侧 tag 后缀、小写化、统一分隔符。
  *
  * @param modelId - provider 原始模型 id，如 "deepseek-v4-flash:0731"。

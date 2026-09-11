@@ -182,12 +182,23 @@ describe('★ 回归：绝不【意外】注册到会遮蔽自带 UI 的槽位',
     }
   })
 
-  it('注册到 conversation.input.left（追加）与 conversation.input.model（有意接管）', () => {
+  it('注册三处：工具行徽章（追加）、模型选择器（有意接管）、设置页（追加）', () => {
     const regs = captureRegistration()
     expect(regs.map((r) => r.slot).sort()).toEqual([
       'conversation.input.left',
       'conversation.input.model',
+      'settings.section',
     ])
+  })
+
+  it('设置页用自有 id 注册到 settings.section（纯追加，不占用既有页面）', () => {
+    const regs = captureRegistration()
+    const settings = regs.find((r) => r.slot === 'settings.section')
+    expect(settings, '缺少设置页注册').toBeDefined()
+    expect(settings?.options.id).toBe('peakrate')
+    expect(settings?.options.name).toBe('settings.section')
+    // label 必须是 thunk —— 语言切换后自动跟随，无需重新注册
+    expect(typeof settings?.options.label).toBe('function')
   })
 
   it('同时传 name（槽位键）与 id（自有 cell 键）—— 只给 id 无法注册', () => {

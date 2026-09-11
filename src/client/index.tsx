@@ -23,6 +23,7 @@ import css from './style.css'
 import { rateFor, detailText } from './rate.js'
 import { RateIcon } from './icons.js'
 import { ModelSelect, type DirectoryState } from './ModelSelect.js'
+import { PeakrateSettings } from './SettingsSection.js'
 
 /**
  * 已知会遮蔽自带 UI、但本插件**有意接管**的槽位（附接管理由）。
@@ -167,6 +168,25 @@ const zh: Record<string, string> = {
   'warning.groupLoad': '{name} 加载失败：{message}',
   'empty.models': '没有可用的模型。',
   'empty.efforts': '当前模型未提供推理等级。',
+  // 设置页
+  'settings.title': '模型峰谷倍率',
+  'settings.desc':
+    '按 provider + 模型判定峰谷时段，在模型选择器与 composer 工具行显示倍率与切换倒计时。',
+  'settings.coverage': '当前覆盖情况',
+  'settings.rules': '匹配规则',
+  'settings.howto': '如何自定义',
+  'settings.colProvider': 'Provider',
+  'settings.colModel': '模型',
+  'settings.colRate': '当前倍率',
+  'settings.colProfile': '命中 profile',
+  'settings.colTarget': '映射到 / 不映射的理由',
+  'settings.notCovered': '未收录',
+  'settings.noSession': '暂无会话，无法读取模型目录（打开一个会话后回到本页即可看到）。',
+  'settings.noModels': '该 provider 未提供模型。',
+  'settings.suspicious': '⚠ {count} 个 provider 完全没有命中',
+  'settings.suspiciousHint':
+    '该 provider 下没有任何模型命中 profile。可能是「确实没有峰谷定价」，也可能是「endpoint 未被识别」——若是后者，请用下面的 config 补充 providerAliases。',
+  'settings.rulesDesc': '内置 {profiles} 个 profile、{providers} 条 provider 映射。',
 }
 const en: Record<string, string> = {
   'trigger.fallback': 'Select model',
@@ -185,6 +205,24 @@ const en: Record<string, string> = {
   'warning.groupLoad': '{name} failed to load: {message}',
   'empty.models': 'No models available.',
   'empty.efforts': 'This model provides no reasoning effort.',
+  'settings.title': 'Model peak rates',
+  'settings.desc':
+    'Judges peak/off-peak per provider + model and shows the rate and countdown in the model selector and the composer tool row.',
+  'settings.coverage': 'Current coverage',
+  'settings.rules': 'Matching rules',
+  'settings.howto': 'How to customize',
+  'settings.colProvider': 'Provider',
+  'settings.colModel': 'Model',
+  'settings.colRate': 'Current rate',
+  'settings.colProfile': 'Matched profile',
+  'settings.colTarget': 'Mapped to / reason for skipping',
+  'settings.notCovered': 'not covered',
+  'settings.noSession': 'No session yet — open one and come back to read the model directory.',
+  'settings.noModels': 'This provider exposes no models.',
+  'settings.suspicious': '⚠ {count} provider(s) matched nothing at all',
+  'settings.suspiciousHint':
+    'No model under this provider matched a profile. It may genuinely have no time-based pricing, or its endpoint is unrecognized — if the latter, add a providerAliases entry below.',
+  'settings.rulesDesc': '{profiles} bundled profile(s), {providers} provider mapping(s).',
 }
 
 /**
@@ -295,7 +333,26 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ② fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
+    // ② 设置页（settings.section 是 list · replaceRisk: none → 自有 id 纯追加）
+    slots.inject('settings.section', () =>
+      slots.register(
+        {
+          name: 'settings.section',
+          id: 'peakrate',
+          order: 60,
+          // label 是 thunk：每次投影重读，语言切换后自动跟随
+          label: () => t('settings.title'),
+          inject: () => ({
+            peakrate: DEFAULT_FACE,
+            modelDirectories: models,
+            t,
+          }),
+        },
+        PeakrateSettings,
+      ),
+    )
+
+    // ③ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
     slots.inject('conversation.input.model', () =>
       slots.register(
         {

@@ -112,8 +112,27 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 | `deepseek-official` | DeepSeek | `deepseek-v4` |
 | `xiaomi-token-plan-cn` | Xiaomi MiMo | `xiaomi-mimo-v2-5-token-plan` |
 
-其余已配置 provider（`openrouter`、`ocg`、`opencode-go`、`ocg-1`、`ocg-1-chat`）
-在数据源中**没有对应 provider**，因此其模型一律不显示。
+**OpenCode Go 系**（`ocg` / `ocg-1` / `opencode-go`）→ `deepseek-v4`。
+依据其官方文档（<https://opencode.ai/docs/go/>）：
+
+> DeepSeek V4.1 Flash / V4 Pro / V4 Flash / V4 Flash Vision Exp: **Peak hours are
+> 01:00-04:00 and 06:00-10:00 UTC, Monday through Friday**; all other hours,
+> including weekends, are Off-Peak.
+
+即**与 DeepSeek 官方窗口完全一致**（转售上游定价，峰值同为 2×）。
+
+**有意不映射**（每条必写理由，见 `src/matching.ts` 的 `UNMATCHED_BY_DESIGN`）：
+
+| provider | 理由 |
+|---|---|
+| `ocg-1-chat` | 仅提供 omen-alpha 等非峰谷计价模型 |
+| `openrouter` | 聚合网关，同一 baseURL 服务数十家厂商，「provider 级」时段规则不成立 |
+
+> **2026-09-12 教训（本条曾写错）**：原文把 `ocg` / `opencode-go` 也列入「数据源没有 → 不显示」。
+> 错误在于把「**数据源覆盖率**」当成了「**上游是否有峰谷定价**」——后者是上游服务的性质，
+> 与我的数据源是否收录无关。**转售方继承上游规则**，而数据源只收录直连厂商。
+> 更糟的是这个错误结论被写进了 spec，看起来像「已验证的设计」。
+> 防范机制见 §4.4。
 
 ### 4.2 模型归一化
 
@@ -135,6 +154,30 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 **不显示**：`ollama` 下的 glm-5.3 / glm-5.3-flash / glm-5.2 / minimax-m3 / kimi-k3、
 `ocg`·`opencode-go`·`ocg-1` 的 deepseek 系、`ocg-1-chat` 的 omen-alpha、
 `openrouter` 的 stealth/ox-alpha。
+
+### 4.4 防静默遗漏机制（2026-09-12 新增）
+
+**根因**：漏掉 ocg 与之前的槽位遮蔽事故是**同一类 bug** —— 「缺少决策」被当成
+「决策就是不做」：没注册 = 没 UI，不在数据源 = 不显示。两者都**静默退化**。
+
+三层防护：
+
+1. **代码清单 + 守卫测试**：`UNMATCHED_BY_DESIGN`（`src/matching.ts`）要求每个
+   已知 provider **要么有映射、要么写明理由**；`test/matching.test.ts` 断言清单
+   理由非空、不与别名表冲突、且清单内的 provider 确实匹配不到。
+   另有一条具名回归测试禁止 ocg 系再次静默消失。
+   **已反向验证**：移除 `ocg` 映射后测试失败并提示「曾漏配」。
+
+2. **设置页实时覆盖表**：`settings.section` 的「模型峰谷倍率」页（§5.4）逐
+   provider 列出模型与命中情况；**「整组零命中且无已知理由」的 provider 会被
+   顶部告警高亮** —— 这正是 ocg 当初的形态。区分「整体零命中」（可疑）与
+   「部分未命中」（正常，如同 provider 下混有非峰谷计价的模型），避免噪音。
+
+3. **交付前穷举**（流程纪律，写入 AGENTS.md）：每次装机前打开设置页通读覆盖表，
+   对每个「整体零命中」的 provider 逐一确认是「确实无峰谷定价」还是「漏配」。
+
+> **为什么首选设置页而不是脚本**：它零依赖、读的是**运行时真实**的 provider×model
+> （脚本只能读静态配置或依赖 Playwright 起浏览器），且用户自己也能随时查。
 
 ## 5. 显示规则
 
@@ -193,6 +236,17 @@ composer 工具行左侧（紧邻模型选择器），用**自己的 id** 做纯
   插件不自行换算或改写单位
 - 倒计时格式：`<1h` 用 `Xm`；`<24h` 用 `Xh Ym`；`≥24h` 用 `Xd Yh`
 - 每 30 秒重算一次，保证倒计时新鲜
+
+### 5.4 设置页（`settings.section`，追加式）
+
+自有 `id: 'peakrate'`、`order: 60`、`label` 为 thunk（跟随语言切换）→ **纯追加**，
+不遮蔽任何自带设置页。内容：
+
+1. **当前覆盖情况（实时）**：`useSessions` 取当前会话 → 读共享模型目录 →
+   逐 provider 列出「模型 / 当前倍率 / 命中 profile」；未收录的标「未收录」。
+   整组零命中且无已知理由者，顶部告警高亮。
+2. **匹配规则**：内置别名表 + 有意不映射的 provider 及理由。
+3. **如何自定义**：`providerAliases` / `modelMappings` 的 config 片段。
 
 ### 5.3 功能取舍（诚实记录）
 
