@@ -17,7 +17,7 @@ import {
   type CoverageReport,
 } from '../coverage.js'
 import { DEFAULT_PROVIDER_ALIASES, UNMATCHED_BY_DESIGN, type MatchConfig, type RateProfile } from '../matching.js'
-import { IconChevronRightOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RateIcon } from './icons.js'
 import { currentPeriod, formatCountdown, type Period } from '../schedule.js'
 import { periodBadge } from './rate.js'
@@ -119,32 +119,36 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
 
   const suspicious = report === undefined ? [] : suspiciousProviders(report)
 
-  // 折叠摘要：一眼看出「已覆盖 N / 共 M」，有可疑项时前置告警记号
+  // 折叠时的描述行（官方卡的 description 位置）：一句话说清这卡是干什么的，
+  // 再附上覆盖概况。不在这里堆告警记号 —— 展开后由告警条承担。
   const summary =
     report === undefined
       ? t('settings.noSessionShort')
-      : `${t('settings.summary', {
+      : `${t('settings.desc')} ${t('settings.summary', {
           covered: report.matchedTotal,
           total: report.matchedTotal + report.unmatchedTotal,
-        })}${suspicious.length > 0 ? t('settings.summaryWarn', { count: suspicious.length }) : ''}`
+        })}`
 
   return (
-    <div className="dsh-peakrate-settings">
+    // 结构对齐官方 PluginCard：<li class=card> + <button class=header>
+    // （headText 取 flex:1，chevron 在**右**侧；展开时 card 换背景色）
+    <li className={`dsh-peakrate-card${open ? ' dsh-peakrate-cardOpen' : ''}`}>
       <button
         type="button"
-        className="dsh-peakrate-settings-toggle"
+        className="dsh-peakrate-cardHeader"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <IconChevronRightOutline14
-          className={`dsh-peakrate-settings-chevron${open ? ' dsh-peakrate-settings-chevronOpen' : ''}`}
+        <span className="dsh-peakrate-cardHeadText">
+          <span className="dsh-peakrate-cardName">{t('settings.title')}</span>
+          <span className="dsh-peakrate-cardDesc">{summary}</span>
+        </span>
+        <IconChevronDownOutline14
+          className={`dsh-peakrate-cardChevron${open ? ' dsh-peakrate-cardChevronOpen' : ''}`}
         />
-        <span className="dsh-peakrate-settings-toggleLabel">{t('settings.title')}</span>
-        <span className="dsh-peakrate-settings-summary">{summary}</span>
       </button>
       {open && (
-      <div className="dsh-peakrate-settings-body">
-      <p className="dsh-peakrate-settings-desc">{t('settings.desc')}</p>
+      <div className="dsh-peakrate-cardBody">
 
       {suspicious.length > 0 && (
         <div className="dsh-peakrate-settings-alert">
@@ -167,85 +171,30 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
           <thead>
             <tr>
               <th>{t('settings.colProvider')}</th>
-              <th>{t('settings.colModel')}</th>
-              <th>{t('settings.colRate')}</th>
-              <th>{t('settings.colProfile')}</th>
+              <th>{t('settings.colCount')}</th>
+              <th>{t('settings.colMissing')}</th>
             </tr>
           </thead>
           <tbody>
-            {report.providers.map((p) =>
-              p.rows.length === 0 ? (
+            {report.providers.map((p) => {
+              const missing = p.rows.filter((r) => r.profileLabel === undefined)
+              return (
                 <tr key={p.id}>
                   <td>{p.name}</td>
-                  <td colSpan={3} className="dsh-peakrate-settings-muted">
-                    {t('settings.noModels')}
+                  <td className="dsh-peakrate-settings-count">{`${p.matched} / ${p.rows.length}`}</td>
+                  <td className="dsh-peakrate-settings-muted">
+                    {missing.length === 0
+                      ? '—'
+                      : missing.map((r) => r.modelName).join(', ')}
                   </td>
                 </tr>
-              ) : (
-                p.rows.map((row, i) => {
-                  const hit = profiles.find((pr) => row.profileLabel === `${pr.providerName} · ${pr.modelLabel}`)
-                  return (
-                    <tr key={`${p.id}/${row.modelId}`}>
-                      <td>{i === 0 ? `${p.name}（${p.id}）` : ''}</td>
-                      <td>{row.modelName}</td>
-                      <td>
-                        <RateTag state={rateOf(hit, now)} />
-                        {hit === undefined && (
-                          <span className="dsh-peakrate-settings-none">{t('settings.notCovered')}</span>
-                        )}
-                      </td>
-                      <td className="dsh-peakrate-settings-muted">{row.profileLabel ?? '—'}</td>
-                    </tr>
-                  )
-                })
-              ),
-            )}
+              )
+            })}
           </tbody>
         </table>
       )}
-
-      <h4 className="dsh-peakrate-settings-h">{t('settings.rules')}</h4>
-      <p className="dsh-peakrate-settings-muted">
-        {t('settings.rulesDesc', {
-          profiles: profiles.length,
-          providers: Object.keys(DEFAULT_PROVIDER_ALIASES).length,
-        })}
-      </p>
-      <table className="dsh-peakrate-settings-table">
-        <thead>
-          <tr>
-            <th>{t('settings.colProvider')}</th>
-            <th>{t('settings.colTarget')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {Object.entries(DEFAULT_PROVIDER_ALIASES).map(([id, name]) => (
-            <tr key={id}>
-              <td>{id}</td>
-              <td className="dsh-peakrate-settings-muted">→ {name}</td>
-            </tr>
-          ))}
-          {Object.entries(UNMATCHED_BY_DESIGN).map(([id, reason]) => (
-            <tr key={id} className="dsh-peakrate-settings-skip">
-              <td>{id}</td>
-              <td className="dsh-peakrate-settings-muted">{reason}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <h4 className="dsh-peakrate-settings-h">{t('settings.howto')}</h4>
-      <pre className="dsh-peakrate-settings-code">{`# 在 profile 的 cordis.patch.yml 中
-- id: peakrate
-  config:
-    providerAliases:
-      my-gateway: DeepSeek      # provider id → 数据源 provider 名
-    modelMappings:
-      - provider: my-gateway
-        match: "^deepseek-v4"   # 前缀或正则
-        profile: deepseek-v4`}</pre>
       </div>
       )}
-    </div>
+    </li>
   )
 }

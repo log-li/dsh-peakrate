@@ -189,56 +189,86 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* 设置页折叠块的头部按钮 */
-.dsh-peakrate-settings-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-.dsh-peakrate-settings-toggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.dsh-peakrate-settings-toggleLabel {
-  flex: none;
-  font-weight: 500;
-}
-
-.dsh-peakrate-settings-summary {
-  flex: 1;
-  min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dsh-peakrate-settings-chevron {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  transition: transform 0.12s;
-}
-
-.dsh-peakrate-settings-chevronOpen {
-  transform: rotate(90deg);
-}
-
-.dsh-peakrate-settings-body {
-  padding: 4px 2px 8px;
-}
 
 /* 菜单再宽一点，容纳「倍率 + 倒计时 + 方向」而不裁切 */
 .dsh-peakrate-ms-menu {
   max-width: min(480px, 100vw - 32px);
+}
+
+
+/* ============ 4) 插件配置卡片 —— 对齐官方 PluginCard ============
+ * 数值照搬官方 dsh-client-ui-settings-plugins 的 PluginCard CSS module
+ * （实测导出：YyYd_a_card / _header / _headText / _name / _description /
+ *   _chevron / _chevronOpen / _body）。不直接复用其哈希类名 —— 换版本就会变。
+ */
+.dsh-peakrate-card {
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-bg-layer-3);
+  border-radius: 16px;
+  list-style: none;
+  transition: border-color 0.16s, background 0.16s;
+}
+
+.dsh-peakrate-cardOpen {
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-label-dimmed);
+}
+
+.dsh-peakrate-cardHeader {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: 0 0;
+  border: 0;
+  border-radius: 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  display: flex;
+}
+
+.dsh-peakrate-cardHeadText {
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  display: flex;
+}
+
+.dsh-peakrate-cardName {
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.dsh-peakrate-cardDesc {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dsh-peakrate-cardChevron {
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+  transition: transform 0.16s;
+}
+
+.dsh-peakrate-cardChevronOpen {
+  transform: rotate(180deg);
+}
+
+.dsh-peakrate-cardBody {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  margin: 0 16px;
+  padding-bottom: 8px;
+}
+
+/* 覆盖表：provider 一行一汇总，「未收录的模型」列允许换行 */
+.dsh-peakrate-settings-count {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
