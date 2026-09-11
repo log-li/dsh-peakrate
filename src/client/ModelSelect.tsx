@@ -33,7 +33,8 @@ import {
   Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCountdown } from '../schedule.js'
-import { rateFor, badgeIcon, type RateState } from './rate.js'
+import { rateFor, type RateState } from './rate.js'
+import { RateIcon } from './icons.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
 
 /** 极简 classnames（官方内部打包了 clsx；本项目零依赖，自行实现等价逻辑）。 */
@@ -541,7 +542,8 @@ function RateChip({ state }: { state: RateState | undefined }): React.ReactEleme
   const countdown = state.minutesUntilSwitch
   return (
     <span className={clsx('dsh-peakrate-ms-rate', `dsh-peakrate-${state.period}`)}>
-      {`${badgeIcon(state.period)}${state.badge}`}
+      <RateIcon period={state.period} size={13} />
+      {state.badge}
       {formatCountdown(countdown) === '' ? null : (
         <span className="dsh-peakrate-ms-rateCountdown">{` · ${formatCountdown(countdown)}`}</span>
       )}

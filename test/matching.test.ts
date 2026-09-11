@@ -58,8 +58,19 @@ describe('matchProfile — provider 别名', () => {
 
   it('未收录的 provider 返回 undefined', () => {
     expect(matchProfile('openrouter', 'stealth/ox-alpha', PROFILES)).toBeUndefined()
-    expect(matchProfile('ocg', 'deepseek-v4-pro', PROFILES)).toBeUndefined()
-    expect(matchProfile('ocg-1', 'deepseek-v4-flash', PROFILES)).toBeUndefined()
+  })
+
+  it('OpenCode Go 系归入 DeepSeek profile（其文档载明峰值窗口与官方一致）', () => {
+    // 依据：https://opencode.ai/docs/go/ —— DeepSeek V4 系峰值 01:00-04:00 / 06:00-10:00 UTC
+    // 周一至周五，与 DeepSeek 官方完全相同（转售上游定价）。
+    expect(matchProfile('ocg', 'deepseek-v4-pro', PROFILES)?.id).toBe('deepseek-v4')
+    expect(matchProfile('ocg', 'deepseek-v4-flash-vision-exp', PROFILES)?.id).toBe('deepseek-v4')
+    expect(matchProfile('ocg-1', 'deepseek-v4-flash', PROFILES)?.id).toBe('deepseek-v4')
+    expect(matchProfile('opencode-go', 'deepseek-v4-flash', PROFILES)?.id).toBe('deepseek-v4')
+  })
+
+  it('OpenCode Go 下的非 DeepSeek 模型不匹配（如 ocg-1-chat 的 omen-alpha）', () => {
+    expect(matchProfile('ocg-1-chat', 'omen-alpha', PROFILES)).toBeUndefined()
   })
 })
 

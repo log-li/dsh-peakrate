@@ -40,11 +40,6 @@ export function rateFor(
   }
 }
 
-/** 徽章图标：峰时闪电、谷时月亮。 */
-export function badgeIcon(period: 'peak' | 'offPeak'): string {
-  return period === 'peak' ? '⚡' : '🌙'
-}
-
 /**
  * 构建悬停详情：当前时段名 + 倍率对照 + 倒计时 + 核验日期。
  *

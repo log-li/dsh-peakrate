@@ -24,6 +24,9 @@
 /* 菜单内每行的倍率徽章 */
 .dsh-peakrate-ms-rate {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 12px;
   line-height: 18px;
   font-variant-numeric: tabular-nums;
@@ -63,7 +66,16 @@
 }
 
 .dsh-peakrate-chip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-weight: 500;
+}
+
+/* 倍率图标：与文字基线对齐 */
+.dsh-peakrate-chip-badge svg,
+.dsh-peakrate-ms-rate svg {
+  flex: none;
 }
 
 .dsh-peakrate-chip-countdown {

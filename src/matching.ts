@@ -51,6 +51,14 @@ export interface MatchConfig {
  */
 export const DEFAULT_PROVIDER_ALIASES: Record<string, string> = {
   'deepseek-official': 'DeepSeek',
+  // OpenCode Go（opencode.ai/zen/go）转售 DeepSeek V4 系，其官方文档载明
+  // 峰值窗口与 DeepSeek 官方**完全一致**（UTC 01:00-04:00 / 06:00-10:00，周一至周五，
+  // 倍率同为 2×）——故归入 DeepSeek profile。
+  // 依据：https://opencode.ai/docs/go/ 「Peak hours are 01:00-04:00 and 06:00-10:00 UTC,
+  // Monday through Friday; all other hours, including weekends, are Off-Peak.」
+  ocg: 'DeepSeek',
+  'ocg-1': 'DeepSeek',
+  'opencode-go': 'DeepSeek',
   ollama: 'Ollama',
   'xiaomi-token-plan-cn': 'Xiaomi MiMo',
   'bai': 'B.AI',
@@ -72,6 +80,13 @@ export const DEFAULT_PROVIDER_ALIASES: Record<string, string> = {
 export const DEFAULT_MODEL_MAPPINGS: ModelMapping[] = [
   { provider: 'deepseek-official', match: 'deepseek-v4', profile: 'deepseek-v4' },
   { provider: 'deepseek-official', match: 'deepseek-flash', profile: 'deepseek-v4' },
+  // OpenCode Go 的 DeepSeek 系（含 vision-exp）→ 同一 profile
+  { provider: 'ocg', match: 'deepseek-v4', profile: 'deepseek-v4' },
+  { provider: 'ocg', match: 'deepseek-flash', profile: 'deepseek-v4' },
+  { provider: 'ocg-1', match: 'deepseek-v4', profile: 'deepseek-v4' },
+  { provider: 'ocg-1', match: 'deepseek-flash', profile: 'deepseek-v4' },
+  { provider: 'opencode-go', match: 'deepseek-v4', profile: 'deepseek-v4' },
+  { provider: 'opencode-go', match: 'deepseek-flash', profile: 'deepseek-v4' },
   { provider: 'ollama', match: 'deepseek-v4', profile: 'ollama-deepseek-v4' },
   { provider: 'ollama', match: 'deepseek-flash', profile: 'ollama-deepseek-v4' },
   { provider: 'xiaomi-token-plan-cn', match: '', profile: 'xiaomi-mimo-v2-5-token-plan' },

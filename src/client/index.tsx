@@ -20,7 +20,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { formatCountdown } from '../schedule.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
 import css from './style.css'
-import { rateFor, badgeIcon, detailText } from './rate.js'
+import { rateFor, detailText } from './rate.js'
+import { RateIcon } from './icons.js'
 import { ModelSelect, type DirectoryState } from './ModelSelect.js'
 
 /**
@@ -135,7 +136,8 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     React.createElement(
       'span',
       { className: 'dsh-peakrate-chip-badge' },
-      `${badgeIcon(rate.period)}${rate.badge}`,
+      React.createElement(RateIcon, { period: rate.period, size: 13 }),
+      rate.badge,
     ),
     countdown === ''
       ? null

@@ -63,9 +63,18 @@ describe('spec §4.3 命中表 —— 不应显示的行', () => {
     }
   })
 
-  it('ocg 系 provider 的 deepseek 模型不显示', () => {
+  it('OpenCode Go 系的 DeepSeek 模型**应显示**（其峰值窗口与官方一致）', () => {
+    // 2026-09-12 修订：OpenCode Go 文档载明 DeepSeek V4 系峰值窗口与 DeepSeek 官方
+    // 完全相同（UTC 01:00-04:00 / 06:00-10:00，周一至周五），故归入同一 profile。
     for (const p of ['ocg', 'opencode-go', 'ocg-1']) {
-      expect(matchProfile(p, 'deepseek-v4-pro', profiles), p).toBeUndefined()
+      expect(matchProfile(p, 'deepseek-v4-pro', profiles)?.id, p).toBe('deepseek-v4')
+    }
+  })
+
+  it('OpenCode Go 下的非 DeepSeek 模型不显示', () => {
+    expect(matchProfile('ocg-1-chat', 'omen-alpha', profiles)).toBeUndefined()
+    for (const p of ['ocg', 'opencode-go', 'ocg-1']) {
+      expect(matchProfile(p, 'glm-5.3', profiles), p).toBeUndefined()
     }
   })
 
