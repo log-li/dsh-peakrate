@@ -305,6 +305,27 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
   指向触发元素（只注入到截图，不进代码，不违反「不伪造」）。
 - **尺寸取舍**：宁可宽一点也要保留上下文；窄图看着精炼但读者看不懂，等于没截。
 
+## npm 可信发布（OIDC）的三个坑（2026-09-12，v0.2.0 发布时逐个踩到）
+
+目标是「推一个 tag 就自动发版，免 OTP、免长期 token」。**三个坑会依次伪装成不同错误**，
+每个都掩盖下一个，所以必须一次全对：
+
+| # | 坑 | 症状 | 正解 |
+|---|---|---|---|
+| 1 | 发布步骤写了 `env: NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`，而该 secret **不存在** | `ENEEDAUTH` | **整段 env 删掉** —— 空值会让 npm 改用 token 认证、**绕过 OIDC** |
+| 2 | `actions/setup-node` 设了 `registry-url` | `E404 Not Found - PUT …`（provenance 却已签署成功！） | **不要设 `registry-url`** —— 它会写出含 `_authToken=${NODE_AUTH_TOKEN}` 的 .npmrc 并导出占位 token，npm 优先用它（npm/cli#8730、actions/setup-node#1477） |
+| 3 | `actions/setup-node` 用 `node-version: 22` | `ENEEDAUTH need auth … npm adduser` | **必须 Node 24** —— 可信发布要求 **npm ≥ 11.5.1**，Node 22 自带 npm 10.x，根本不会尝试 OIDC |
+
+**识别要领**：
+- `provenance 已签署成功但仍 404/ENEEDAUTH` → **签名是本地行为，不证明授权**，别被它误导。
+- 错误码在 E404 / ENEEDAUTH 之间跳变 → 几乎总是「认证方式被抢」而非「权限不足」。
+- 成功标志：npm 上该版本的 `_npmUser.name` 是 **`GitHub Actions`**（OIDC 身份），
+  而不是你自己的账号（那是 token 发布）。
+
+**另需**：npm 网站 → 该包 → Settings → Trusted Publisher 填 GitHub Actions /
+`<owner>` / `<repo>` / `release.yml`，**Environment 留空**（填了就要在 job 上写
+`environment:` 且两处完全一致）。
+
 ## 提交门禁
 
 - **Spec 先行**：行为/配置变化 → 先更新 spec（`.plans/spec/dsh-peakrate-spec.md `）
