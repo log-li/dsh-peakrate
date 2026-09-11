@@ -96,7 +96,6 @@
     "url": "https://github.com/log-li/dsh-peakrate/issues"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }
