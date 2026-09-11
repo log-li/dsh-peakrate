@@ -237,10 +237,14 @@ composer 工具行左侧（紧邻模型选择器），用**自己的 id** 做纯
 - 倒计时格式：`<1h` 用 `Xm`；`<24h` 用 `Xh Ym`；`≥24h` 用 `Xd Yh`
 - 每 30 秒重算一次，保证倒计时新鲜
 
-### 5.4 设置页（`settings.section`，追加式）
+### 5.4 设置页嵌入（`settings.models.footer`，追加式、可展开）
 
-自有 `id: 'peakrate'`、`order: 60`、`label` 为 thunk（跟随语言切换）→ **纯追加**，
-不遮蔽任何自带设置页。内容：
+**2026-09-12 修订**：原先注册为独立的 `settings.section` 标签页；用户要求
+**不要单独占一个标签页**，而是嵌进官方「设置 → 模型」页作为**可展开的一栏**。
+
+现注册到 **`settings.models.footer`**（list · `replaceRisk: none` · 该槽位在无注册者时
+不渲染任何内容），自有 `id: 'peakrate'` → **纯追加**。折叠态只显示一行标题
+（含覆盖摘要），展开后显示完整内容：
 
 1. **当前覆盖情况（实时）**：`useSessions` 取当前会话 → 读共享模型目录 →
    逐 provider 列出「模型 / 当前倍率 / 命中 profile」；未收录的标「未收录」。
@@ -365,14 +369,43 @@ dsh-peakrate/
 5. **E2E 审计**：通读模型选择器完整渲染输出（不只检查字段），确认无重复、
    无错位、无残留占位
 
-## 11. 未决项（deferred）
+## 11. 已实现/未决项
 
-- **campaign 活动窗口**：数据源里有该概念（如 `zai-glm-5-3-flash` 带 `campaign`），
-  但当前严格匹配下 **0 命中**（用户配置命中的 3 个 profile 均无 campaign）。
-  本次实现**只预留字段**（解析但不渲染第三态），待将来命中时再开 UI 分支。
-- **单价与花费计算**：明确不做（本插件只显示倍率与倒计时，不显示金额）。
-- **非 offpeakclock 覆盖的 provider**：不显示；若将来数据源扩充或用户用
-  `customProfiles` 自建，可自然生效。
+### 11.1 campaign 活动窗口（2026-09-12 **已实现**，原为 deferred）
+
+**数据形态**（原 spec 漏看了）：活动窗口不在顶层 `campaign` 字段，而在
+**`schedule.overrides`**：
+
+```json
+"schedule": {
+  "timeZone": "Asia/Shanghai",
+  "peakDays": [1,2,3,4,5],
+  "peakWindows": [{ "start": "14:00", "end": "18:00" }],
+  "overrides": [{
+    "period": "campaign",
+    "startDate": "2026-09-03",
+    "endDate": "2026-09-20",
+    "days": [0,1,2,3,4,5,6],
+    "windows": [{ "start": "23:00", "end": "09:00" }]
+  }]
+}
+```
+
+对应 `periods.campaign`（第三种时段态）：`name` / `status` / `badge`（如 `"Campaign"`）/
+`detail` / `tone: "special"`。
+
+**判定规则**：**override 优先于常规峰谷** —— 当「当前日期落在 `[startDate, endDate]`
+（按 profile 时区，闭区间）**且** 当天星期在 `days` 内**且** 当前时间落在任一
+`windows`（start 含、end 不含）内」时，状态为 `campaign`；否则退回常规判定。
+
+**为什么当初误判为「0 命中」**：只查了顶层 `campaign` 字段，没看 `schedule.overrides`。
+又一次「**没找到 ≠ 不存在**」——与 §4.4 的 ocg 漏配是同一类错误。
+
+### 11.2 明确不做
+
+- **单价与花费计算**：本插件只显示倍率与倒计时，不显示金额。
+- **非数据源覆盖的 provider**：不显示；若将来数据源扩充或用户用 `customProfiles`
+  自建，可自然生效。
 
 ## 12. 实现阶段
 

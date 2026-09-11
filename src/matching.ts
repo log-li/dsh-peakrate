@@ -17,12 +17,24 @@ export interface RateProfile {
     peakDays: number[]
     peakWindows: { start: string; end: string }[]
     offDayName?: string
+    /** 带日期区间的覆盖段（活动窗口）；优先级高于常规峰谷。 */
+    overrides?: {
+      period: 'peak' | 'offPeak' | 'campaign'
+      startDate?: string
+      endDate?: string
+      days: number[]
+      windows: { start: string; end: string }[]
+    }[]
   }
   peakBadge: string
   offPeakBadge: string
   /** 峰/谷时段名，用于 hover 详情。 */
   peakName: string
   offPeakName: string
+  /** 活动态（数据源 `periods.campaign`）——仅部分 profile 有。 */
+  campaignBadge?: string
+  campaignName?: string
+  campaignDetail?: string
   source?: string
   verifiedAt?: string
 }
@@ -90,6 +102,10 @@ export const DEFAULT_MODEL_MAPPINGS: ModelMapping[] = [
   { provider: 'ollama', match: 'deepseek-v4', profile: 'ollama-deepseek-v4' },
   { provider: 'ollama', match: 'deepseek-flash', profile: 'ollama-deepseek-v4' },
   { provider: 'xiaomi-token-plan-cn', match: '', profile: 'xiaomi-mimo-v2-5-token-plan' },
+  // Z.ai：数据源分别覆盖 GLM-5.3 与 GLM-5.3-Flash（后者带 campaign 活动窗口）。
+  // 注意顺序：'glm-5.3-flash' 必须先于 'glm-5.3'，否则前缀匹配会把 flash 归到非 flash。
+  { provider: 'zai', match: 'glm-5.3-flash', profile: 'zai-glm-5-3-flash' },
+  { provider: 'zai', match: 'glm-5.3', profile: 'zai-glm-5-3' },
 ]
 
 /**

@@ -182,6 +182,9 @@ const zh: Record<string, string> = {
   'settings.colTarget': '映射到 / 不映射的理由',
   'settings.notCovered': '未收录',
   'settings.noSession': '暂无会话，无法读取模型目录（打开一个会话后回到本页即可看到）。',
+  'settings.noSessionShort': '暂无会话数据',
+  'settings.summary': '已覆盖 {covered} / {total} 个模型',
+  'settings.summaryWarn': ' · ⚠ {count} 个 provider 未命中',
   'settings.noModels': '该 provider 未提供模型。',
   'settings.suspicious': '⚠ {count} 个 provider 完全没有命中',
   'settings.suspiciousHint':
@@ -218,6 +221,9 @@ const en: Record<string, string> = {
   'settings.colTarget': 'Mapped to / reason for skipping',
   'settings.notCovered': 'not covered',
   'settings.noSession': 'No session yet — open one and come back to read the model directory.',
+  'settings.noSessionShort': 'No session data',
+  'settings.summary': '{covered} / {total} models covered',
+  'settings.summaryWarn': ' · ⚠ {count} provider(s) unmatched',
   'settings.noModels': 'This provider exposes no models.',
   'settings.suspicious': '⚠ {count} provider(s) matched nothing at all',
   'settings.suspiciousHint':
@@ -333,13 +339,14 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ② 设置页（settings.section 是 list · replaceRisk: none → 自有 id 纯追加）
-    slots.inject('settings.section', () =>
+    // ② 嵌入官方「设置 → 模型」页的页脚（list · replaceRisk: none → 自有 id 纯追加）。
+    //    用户要求不要单独占一个标签页，而是并进官方页作为可展开的一栏。
+    slots.inject('settings.models.footer', () =>
       slots.register(
         {
-          name: 'settings.section',
+          name: 'settings.models.footer',
           id: 'peakrate',
-          order: 60,
+          order: 10,
           // label 是 thunk：每次投影重读，语言切换后自动跟随
           label: () => t('settings.title'),
           inject: () => ({

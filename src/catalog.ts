@@ -12,6 +12,16 @@ export const SUPPORTED_SCHEMA_VERSION = 1
 interface RawPeriod {
   name?: string
   badge?: string
+  detail?: string
+  tone?: string
+}
+
+interface RawOverride {
+  period?: string
+  startDate?: string
+  endDate?: string
+  days?: number[]
+  windows?: { start?: string; end?: string }[]
 }
 
 interface RawProfile {
@@ -23,10 +33,12 @@ interface RawProfile {
     peakDays?: number[]
     peakWindows?: { start?: string; end?: string }[]
     offDayName?: string
+    overrides?: RawOverride[]
   }
   periods?: {
     peak?: RawPeriod
     offPeak?: RawPeriod
+    campaign?: RawPeriod
   }
   source?: string
   verifiedAt?: string
@@ -91,6 +103,27 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
     return undefined
   }
 
+  // 活动覆盖段：period 只接受受支持的取值，窗口必须合法
+  const overrides: NonNullable<RateProfile['schedule']['overrides']> = []
+  for (const o of schedule.overrides ?? []) {
+    if (o?.period !== 'campaign') continue // 目前仅支持 campaign
+    const wins = Array.isArray(o.windows)
+      ? o.windows
+          .filter((w) => isClock(w?.start) && isClock(w?.end))
+          .map((w) => ({ start: w.start as string, end: w.end as string }))
+      : []
+    if (wins.length === 0) continue
+    overrides.push({
+      period: o.period,
+      ...(typeof o.startDate === 'string' ? { startDate: o.startDate } : {}),
+      ...(typeof o.endDate === 'string' ? { endDate: o.endDate } : {}),
+      days: Array.isArray(o.days)
+        ? o.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+        : [],
+      windows: wins,
+    })
+  }
+
   const peak = raw.periods?.peak
   const offPeak = raw.periods?.offPeak
   if (typeof peak?.badge !== 'string' || typeof offPeak?.badge !== 'string') return undefined
@@ -104,11 +137,23 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
       peakDays,
       peakWindows,
       ...(typeof schedule.offDayName === 'string' ? { offDayName: schedule.offDayName } : {}),
+      ...(overrides.length === 0 ? {} : { overrides }),
     },
     peakBadge: peak.badge,
     offPeakBadge: offPeak.badge,
     peakName: typeof peak.name === 'string' ? peak.name : 'Peak',
     offPeakName: typeof offPeak.name === 'string' ? offPeak.name : 'Off-peak',
+  }
+  // 活动态：只有当**确实存在 campaign override** 时才带上，避免出现
+  // 「有 campaign 徽章却永远不会进入该状态」的死数据。
+  const campaign = raw.periods?.campaign
+  if (
+    overrides.length > 0 &&
+    typeof campaign?.badge === 'string'
+  ) {
+    profile.campaignBadge = campaign.badge
+    profile.campaignName = typeof campaign.name === 'string' ? campaign.name : 'Campaign'
+    if (typeof campaign.detail === 'string') profile.campaignDetail = campaign.detail
   }
   if (typeof raw.source === 'string') profile.source = raw.source
   if (typeof raw.verifiedAt === 'string') profile.verifiedAt = raw.verifiedAt

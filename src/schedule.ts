@@ -20,9 +20,26 @@ export interface Schedule {
   peakDays: number[]
   peakWindows: PeakWindow[]
   offDayName?: string
+  /** 优先级高于常规峰谷的覆盖段（活动窗口等）。 */
+  overrides?: ScheduleOverride[]
 }
 
-export type Period = 'peak' | 'offPeak'
+/**
+ * 时段状态。`campaign` 是**第三态**：限时活动窗口（来自 profile 的
+ * `schedule.overrides`，带日期区间），优先级高于常规峰谷。
+ */
+export type Period = 'peak' | 'offPeak' | 'campaign'
+
+/** 带日期区间与星期过滤的时段覆盖（目前只有 campaign 用）。 */
+export interface ScheduleOverride {
+  period: Period
+  /** 起止日期（`YYYY-MM-DD`，按 profile 自身时区，闭区间）；缺省表示不限日期。 */
+  startDate?: string
+  endDate?: string
+  /** 0=周日 … 6=周六；空/缺省表示每天。 */
+  days: number[]
+  windows: PeakWindow[]
+}
 
 export interface PeriodResult {
   period: Period
@@ -44,11 +61,17 @@ function parseMinutes(hhmm: string): number {
  * 取某时刻在目标时区下的「墙上时间」分量。
  * 用 formatToParts 而非解析字符串，避免 locale 差异导致的格式漂移。
  */
-function wallClock(now: Date, timeZone: string): { weekday: number; minutes: number } {
-  const parts = new Intl.DateTimeFormat('en-US', {
+function wallClock(
+  now: Date,
+  timeZone: string,
+): { weekday: number; minutes: number; date: string } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
     hour12: false,
     weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
   }).formatToParts(now)
@@ -56,6 +79,9 @@ function wallClock(now: Date, timeZone: string): { weekday: number; minutes: num
   let weekday = 0
   let hour = 0
   let minute = 0
+  let y = ''
+  let mo = ''
+  let d = ''
   for (const p of parts) {
     if (p.type === 'weekday') {
       const idx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.value)
@@ -65,9 +91,52 @@ function wallClock(now: Date, timeZone: string): { weekday: number; minutes: num
       hour = Number(p.value) % 24
     } else if (p.type === 'minute') {
       minute = Number(p.value)
+    } else if (p.type === 'year') {
+      y = p.value
+    } else if (p.type === 'month') {
+      mo = p.value
+    } else if (p.type === 'day') {
+      d = p.value
     }
   }
-  return { weekday, minutes: hour * 60 + minute }
+  return { weekday, minutes: hour * 60 + minute, date: `${y}-${mo}-${d}` }
+}
+
+/**
+ * 某个 override 此刻是否生效。
+ *
+ * 三个条件同时成立才算：① 当前日期在 `[startDate, endDate]` 闭区间内（按
+ * profile 时区）；② 当天星期在 `days` 内（空表示每天）；③ 当前时间落在任一
+ * `windows` 内（start 含、end 不含）。
+ *
+ * @param override - 覆盖段定义。
+ * @param weekday - 当前星期（0=周日）。
+ * @param minutes - 当天第几分钟。
+ * @param date - 当前日期（`YYYY-MM-DD`，profile 时区）。
+ */
+function overrideActive(
+  override: ScheduleOverride,
+  weekday: number,
+  minutes: number,
+  date: string,
+): boolean {
+  // 日期区间（字符串比较对 YYYY-MM-DD 有效）
+  if (override.startDate !== undefined && date < override.startDate) return false
+  if (override.endDate !== undefined && date > override.endDate) return false
+  // 星期过滤
+  if (override.days.length > 0 && !override.days.includes(weekday)) return false
+  // 时间窗口（支持跨午夜）
+  for (const w of override.windows) {
+    const start = parseMinutes(w.start)
+    const end = parseMinutes(w.end)
+    if (Number.isNaN(start) || Number.isNaN(end)) continue
+    if (end > start) {
+      if (minutes >= start && minutes < end) return true
+    } else if (minutes >= start || minutes < end) {
+      return true
+    }
+  }
+  return false
 }
 
 /** 该星期是否属于峰时天。 */
@@ -106,7 +175,8 @@ function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minute
   const windows = normalizedWindows(schedule)
   if (windows.length === 0) return Number.POSITIVE_INFINITY
 
-  const currentState = isPeakAt(schedule, windows, weekday, minutes)
+  const baseDate = wallClock(now, schedule.timeZone).date
+  const currentState = stateAt(schedule, windows, weekday, minutes, baseDate)
 
   // 只在「候选时刻」上判定状态变化即可——相邻候选之间的状态恒定。
   //
@@ -133,9 +203,13 @@ function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minute
   // 遍历「窗口所属日」，把该日所有窗口的 start/end 以其绝对分钟加入候选。
   // 跨午夜窗口的 end 已归一化为 > 1440（如 22:00-02:00 → end=1560），
   // 加到 dayOffset*1440 上自然落到次日，无需额外 +1 天。
+  // override（活动）窗口的边界同样是翻转点，必须一并作为候选。
+  const overrideWindows = (schedule.overrides ?? []).flatMap((o) =>
+    normalizedWindowsOf(o.windows),
+  )
   for (let dayOffset = 0; dayOffset <= 9; dayOffset++) {
-    pushAbs(dayOffset * 1440) // 每天 00:00：前一天的跨午夜段可能在此结束
-    for (const w of windows) {
+    pushAbs(dayOffset * 1440) // 每天 00:00：前一天的跨午夜段 / 活动日期区间可能在此结束
+    for (const w of [...windows, ...overrideWindows]) {
       // 窗口起点（当天）
       pushAbs(dayOffset * 1440 + w.start)
       // 窗口终点：跨午夜时 end > 1440，其「当天 02:00」形式同样要加入候选。
@@ -153,7 +227,13 @@ function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minute
     // 未来性判定：候选的绝对分钟数须晚于「现在」（今天是 0 基准）。
     if (p.absolute <= minutes) continue
     const dayAt = (weekday + p.dayOffset) % 7
-    const stateAfter = isPeakAt(schedule, windows, dayAt, p.minuteOfDay)
+    const stateAfter = stateAt(
+      schedule,
+      windows,
+      dayAt,
+      p.minuteOfDay,
+      addDays(baseDate, p.dayOffset),
+    )
     if (stateAfter === currentState) continue
 
     const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
@@ -162,6 +242,54 @@ function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minute
     if (deltaMs > 0) return Math.round(deltaMs / 60000)
   }
   return Number.POSITIVE_INFINITY
+}
+
+/** 在 `YYYY-MM-DD` 上加天数（按 UTC 日历，避免本地时区干扰）。 */
+function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const t = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1))
+  t.setUTCDate(t.getUTCDate() + days)
+  const yy = t.getUTCFullYear()
+  const mm = String(t.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(t.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+/** 把任意窗口数组归一化（end 跨午夜时 +1440，按 start 升序）。 */
+function normalizedWindowsOf(list: PeakWindow[]): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = []
+  for (const w of list) {
+    const start = parseMinutes(w.start)
+    const end = parseMinutes(w.end)
+    if (Number.isNaN(start) || Number.isNaN(end)) continue
+    out.push({ start, end: end > start ? end : end + 1440 })
+  }
+  return out.sort((a, b) => a.start - b.start)
+}
+
+/**
+ * 判定某时刻的**完整时段状态**（含活动覆盖）。
+ *
+ * **override 优先于常规峰谷**：任一 override 生效时直接返回它的 `period`；
+ * 否则退回 `isPeakAt` 的峰/谷判定。
+ *
+ * @param schedule - 时段规则。
+ * @param windows - 已归一化的常规窗口。
+ * @param weekday - 当天星期。
+ * @param minutes - 当天第几分钟。
+ * @param date - 当天日期（profile 时区，`YYYY-MM-DD`）。
+ */
+function stateAt(
+  schedule: Schedule,
+  windows: { start: number; end: number }[],
+  weekday: number,
+  minutes: number,
+  date: string,
+): Period {
+  for (const o of schedule.overrides ?? []) {
+    if (overrideActive(o, weekday, minutes, date)) return o.period
+  }
+  return isPeakAt(schedule, windows, weekday, minutes) ? 'peak' : 'offPeak'
 }
 
 /**
@@ -286,11 +414,10 @@ function tzOffsetMs(timeZone: string, at: Date): number {
  * @returns 当前时段与距切换分钟数（总为正）。
  */
 export function currentPeriod(schedule: Schedule, now: Date): PeriodResult {
-  const { weekday, minutes } = wallClock(now, schedule.timeZone)
+  const { weekday, minutes, date } = wallClock(now, schedule.timeZone)
   // 与 minutesUntilFlip 共用同一判定函数，保证「时段」与「倒计时」语义一致
   // （两者若各算各的，跨午夜窗口处会出现「说自己是 peak 却倒计时到明天」的矛盾）。
-  const peak = isPeakAt(schedule, normalizedWindows(schedule), weekday, minutes)
-  const period: Period = peak ? 'peak' : 'offPeak'
+  const period = stateAt(schedule, normalizedWindows(schedule), weekday, minutes, date)
   const minutesUntilSwitch = minutesUntilFlip(schedule, now, weekday, minutes)
   return { period, minutesUntilSwitch }
 }

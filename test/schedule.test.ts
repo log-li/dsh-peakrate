@@ -372,3 +372,71 @@ describe('★ 回归：窗口边界 ≠ 状态翻转点', () => {
     expect(bad).toEqual([])
   })
 })
+
+describe('★ campaign 活动态（schedule.overrides）', () => {
+  /** 复刻真实数据：zai-glm-5-3-flash —— 新加坡时，活动 2026-09-03~20 每天 23:00-09:00。 */
+  const ZAI: Schedule = {
+    timeZone: 'Asia/Shanghai',
+    peakDays: [1, 2, 3, 4, 5],
+    peakWindows: [{ start: '14:00', end: '18:00' }],
+    overrides: [
+      {
+        period: 'campaign',
+        startDate: '2026-09-03',
+        endDate: '2026-09-20',
+        days: [0, 1, 2, 3, 4, 5, 6],
+        windows: [{ start: '23:00', end: '09:00' }],
+      },
+    ],
+  }
+  /** 由北京时构造时刻（北京时 = UTC+8）。 */
+  const bj = (s: string) => new Date(s.replace(' ', 'T') + '+08:00')
+
+  it('活动窗口内（23:30）判为 campaign', () => {
+    expect(currentPeriod(ZAI, bj('2026-09-10 23:30')).period).toBe('campaign')
+  })
+
+  it('活动窗口跨午夜延续段（次日 02:00）仍为 campaign', () => {
+    expect(currentPeriod(ZAI, bj('2026-09-10 23:30')).period).toBe('campaign')
+    expect(currentPeriod(ZAI, bj('2026-09-11 02:00')).period).toBe('campaign')
+  })
+
+  it('活动结束了（09:00 起）退回常规判定', () => {
+    // 09:00 是窗口终点（不含）；周四 09:00 不落在常规峰时窗口（14:00-18:00）→ offPeak
+    expect(currentPeriod(ZAI, bj('2026-09-10 09:00')).period).toBe('offPeak')
+    // 14:30 落在常规峰时窗口 → peak
+    expect(currentPeriod(ZAI, bj('2026-09-10 14:30')).period).toBe('peak')
+  })
+
+  it('日期区间之外不生效（活动 9-03 ~ 9-20）', () => {
+    // 9-02（区间前）与 9-21（区间后）的 23:30 都应是常规态
+    expect(currentPeriod(ZAI, bj('2026-09-02 23:30')).period).toBe('offPeak')
+    expect(currentPeriod(ZAI, bj('2026-09-21 23:30')).period).toBe('offPeak')
+  })
+
+  it('区间边界为闭区间（9-03 与 9-20 当天生效）', () => {
+    expect(currentPeriod(ZAI, bj('2026-09-03 23:30')).period).toBe('campaign')
+    expect(currentPeriod(ZAI, bj('2026-09-20 23:30')).period).toBe('campaign')
+  })
+
+  it('倒计时指向活动窗口结束（而非下一个常规翻转点）', () => {
+    // 23:30 → 次日 09:00 = 9h30m = 570min
+    expect(currentPeriod(ZAI, bj('2026-09-10 23:30')).minutesUntilSwitch).toBe(570)
+  })
+
+  it('活动开始前的倒计时指向活动开始', () => {
+    // 22:50 → 23:00 = 10min（这正是用户实测看到的「9m」）
+    const r = currentPeriod(ZAI, bj('2026-09-10 22:50'))
+    expect(r.period).toBe('offPeak')
+    expect(r.minutesUntilSwitch).toBe(10)
+  })
+
+  it('无 overrides 的 schedule 行为不变', () => {
+    const plain: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [{ start: '12:00', end: '18:00' }],
+    }
+    expect(currentPeriod(plain, utc('2026-09-14T13:00:00Z')).period).toBe('peak')
+  })
+})

@@ -171,3 +171,58 @@
   overflow-x: auto;
   margin: 0;
 }
+
+/* 活动态（campaign）：品牌色，与峰/谷区分 */
+.dsh-peakrate-campaign {
+  color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+/* 设置页折叠块的头部按钮 */
+.dsh-peakrate-settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.dsh-peakrate-settings-toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.dsh-peakrate-settings-toggleLabel {
+  flex: none;
+  font-weight: 500;
+}
+
+.dsh-peakrate-settings-summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-peakrate-settings-chevron {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform 0.12s;
+}
+
+.dsh-peakrate-settings-chevronOpen {
+  transform: rotate(90deg);
+}
+
+.dsh-peakrate-settings-body {
+  padding: 4px 2px 8px;
+}

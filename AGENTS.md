@@ -1,12 +1,16 @@
 # AGENTS.md — dsh-peakrate
 
-DSH 生态插件：显示模型的峰谷倍率与切换倒计时，两处互补呈现：
+DSH 生态插件：显示模型的峰谷倍率与切换倒计时，三处呈现：
 
 1. **composer 工具行**（追加式，`conversation.input.left`）——免开菜单即见当前模型倍率；
 2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷，
-   选型时可直接比价。
+   选型时可直接比价；
+3. **设置 → 模型 页脚**（追加式，`settings.models.footer`）——可展开的实时覆盖面板 + 规则说明。
 
 第 2 项是**有意遮蔽**自带 UI，必须遵守「**功能超集**」纪律（见下方槽位坑）。
+
+**三种时段态**：`peak`（峰）/ `offPeak`（谷）/ **`campaign`（限时活动，来自
+`schedule.overrides`，带日期区间与星期过滤，优先级高于常规峰谷）**。
 
 **设计真相见 spec**：`.plans/spec/dsh-peakrate-spec.md ` —— 改行为前先读它，
 改行为后先更新它（全局「Spec 先行规则」）。
@@ -43,7 +47,7 @@ dsh-peakrate/
 │   └── client/
 │       ├── index.tsx     # 注册三处 + locale 文案
 │       ├── ModelSelect.tsx    # fork 官方选择器（功能超集）+ 每行倍率徽章
-│       ├── SettingsSection.tsx # 设置页：实时覆盖表 + 规则说明
+│       ├── SettingsSection.tsx # 嵌入官方「设置→模型」页脚的可展开覆盖面板
 │       ├── rate.ts       # 倍率判定共享层
 │       ├── icons.tsx     # DSH 风格单色描边 SVG 图标
 │       └── style.css     # 仅用 --dsw-* 设计 token
@@ -238,7 +242,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 2. 菜单内每行显示倍率；未匹配的模型（如 kimi-k3）**什么都不显示**
 3. composer 工具行的当前模型徽章仍在（与菜单呈现互补）
 4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
-5. **设置 → 模型峰谷倍率** 页面正常渲染，且**无 ⚠ 告警**
+5. **设置 → 模型** 页脚出现「模型峰谷倍率」折叠栏，展开后覆盖表正常且**无 ⚠ 告警**
 
 ## 提交门禁
 

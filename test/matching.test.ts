@@ -30,6 +30,7 @@ const PROFILES: RateProfile[] = [
   profile('ollama-deepseek-v4', 'Ollama'),
   profile('xiaomi-mimo-v2-5-token-plan', 'Xiaomi MiMo'),
   profile('zai-glm-5-3', 'Z.ai'),
+  profile('zai-glm-5-3-flash', 'Z.ai'),
 ]
 
 describe('normalizeModelId', () => {
@@ -148,12 +149,19 @@ describe('matchProfile — config 覆盖优先级', () => {
     expect(hit?.id).toBe('zai-glm-5-3')
   })
 
-  it('非法正则不抛错，只是不命中', () => {
-    const hit = matchProfile('zai', 'glm-5.3', PROFILES, {
-      providerAliases: { zai: 'Z.ai' },
-      modelMappings: [{ provider: 'zai', match: '([', profile: 'zai-glm-5-3', matchIsRegex: true }],
+  it('非法正则不抛错，只是不命中（用无内置映射的 provider，避免被内置规则接管）', () => {
+    const hit = matchProfile('my-gateway', 'glm-5.3', PROFILES, {
+      providerAliases: { 'my-gateway': 'Z.ai' },
+      modelMappings: [
+        { provider: 'my-gateway', match: '([', profile: 'zai-glm-5-3', matchIsRegex: true },
+      ],
     })
     expect(hit).toBeUndefined()
+  })
+
+  it('内置 Z.ai 映射：flash 必须先于非 flash 匹配（前缀顺序敏感）', () => {
+    expect(matchProfile('zai', 'glm-5.3-flash', PROFILES)?.id).toBe('zai-glm-5-3-flash')
+    expect(matchProfile('zai', 'glm-5.3', PROFILES)?.id).toBe('zai-glm-5-3')
   })
 })
 

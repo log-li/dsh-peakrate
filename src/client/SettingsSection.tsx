@@ -17,8 +17,10 @@ import {
   type CoverageReport,
 } from '../coverage.js'
 import { DEFAULT_PROVIDER_ALIASES, UNMATCHED_BY_DESIGN, type MatchConfig, type RateProfile } from '../matching.js'
+import { IconChevronRightOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RateIcon } from './icons.js'
-import { currentPeriod, formatCountdown } from '../schedule.js'
+import { currentPeriod, formatCountdown, type Period } from '../schedule.js'
+import { periodBadge } from './rate.js'
 
 /** 注入面。 */
 export interface SettingsInjected {
@@ -69,23 +71,20 @@ function RateTag({ state }: { state: ReturnType<typeof rateOf> }): React.ReactEl
 function rateOf(
   profile: RateProfile | undefined,
   now: Date,
-): { period: 'peak' | 'offPeak'; badge: string; minutesUntilSwitch: number } | undefined {
+): { period: Period; badge: string; minutesUntilSwitch: number } | undefined {
   if (profile === undefined) return undefined
   const { period, minutesUntilSwitch } = currentPeriod(profile.schedule, now)
-  return {
-    period,
-    badge: period === 'peak' ? profile.peakBadge : profile.offPeakBadge,
-    minutesUntilSwitch,
-  }
+  return { period, badge: periodBadge(profile, period), minutesUntilSwitch }
 }
 
-/**
- * 设置页主体。
+/** 设置页主体。
  *
  * @param props - 注入面与标准 props。
  */
 export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactElement {
   const { peakrate, t } = props
+  // 折叠态（默认收起）——避免在官方「模型」页里喧宾夺主
+  const [open, setOpen] = React.useState(false)
   const profiles = peakrate.profiles()
   const config = peakrate.config()
 
@@ -120,9 +119,31 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
 
   const suspicious = report === undefined ? [] : suspiciousProviders(report)
 
+  // 折叠摘要：一眼看出「已覆盖 N / 共 M」，有可疑项时前置告警记号
+  const summary =
+    report === undefined
+      ? t('settings.noSessionShort')
+      : `${t('settings.summary', {
+          covered: report.matchedTotal,
+          total: report.matchedTotal + report.unmatchedTotal,
+        })}${suspicious.length > 0 ? t('settings.summaryWarn', { count: suspicious.length }) : ''}`
+
   return (
     <div className="dsh-peakrate-settings">
-      <h3 className="dsh-peakrate-settings-title">{t('settings.title')}</h3>
+      <button
+        type="button"
+        className="dsh-peakrate-settings-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <IconChevronRightOutline14
+          className={`dsh-peakrate-settings-chevron${open ? ' dsh-peakrate-settings-chevronOpen' : ''}`}
+        />
+        <span className="dsh-peakrate-settings-toggleLabel">{t('settings.title')}</span>
+        <span className="dsh-peakrate-settings-summary">{summary}</span>
+      </button>
+      {open && (
+      <div className="dsh-peakrate-settings-body">
       <p className="dsh-peakrate-settings-desc">{t('settings.desc')}</p>
 
       {suspicious.length > 0 && (
@@ -223,6 +244,8 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
       - provider: my-gateway
         match: "^deepseek-v4"   # 前缀或正则
         profile: deepseek-v4`}</pre>
+      </div>
+      )}
     </div>
   )
 }
