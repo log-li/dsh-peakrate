@@ -3,7 +3,13 @@
  * `viewBox="0 0 16 16"`、`fill="none"`、`stroke="currentColor"`、描边 1.4、
  * 圆角端点，颜色继承自外层（峰时警示色 / 谷时次级色）。
  *
- * 语义：**涨 = 贵（峰时）**、**跌 = 便宜（谷时）**、**星芒 = 限时活动**。
+ * 语义（2026-09-12 修订）：**双峰山 = 峰时**、**双谷 = 谷时**、**星芒 = 限时活动**。
+ *
+ * **为什么从「折线箭头」改成「波峰/波谷」**（用户指出）：
+ * 折线上扬/下探带箭头，容易被读成「**之后会涨/跌**」——那是**方向**语义，
+ * 而本图标要表达的是「**此刻处于高位还是低位**」。方向 ≠ 形状。
+ * 波峰/波谷是**形状**：山不是「在上升」，它本身就是高点，歧义消失。
+ * （中文语境里「峰/谷」也正好对应峰时/谷时。）
  * 曾用 emoji（🌙 / ⚡）—— 彩色 emoji 与单色 UI 语言冲突、观感突兀，故改为内联 SVG。
  */
 import * as React from 'react'
@@ -34,7 +40,7 @@ export function RateIcon({
     viewBox: '0 0 16 16',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.4,
+    strokeWidth: period === 'campaign' ? 1.4 : 1.35,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
     className,
@@ -51,14 +57,11 @@ export function RateIcon({
       }),
     )
   }
-  // 折线：谷→峰（上扬）或 峰→谷（下探），末段带箭头
-  const points =
-    period === 'peak' ? 'M2.5 11.5 6 8l2.5 2.5L14 5' : 'M2.5 4.5 6 8l2.5-2.5L14 11'
-  const arrow = period === 'peak' ? 'M10.5 5H14v3.5' : 'M10.5 11H14V7.5'
-  return React.createElement(
-    'svg',
-    common,
-    React.createElement('path', { d: points }),
-    React.createElement('path', { d: arrow }),
-  )
+  // 双峰山 / 双谷：形状本身表达高/低，不暗示方向。
+  // 用「两座山 / 两道谷」而非单个拱形 —— 更像地貌、也更易在 13px 下辨认。
+  const curve =
+    period === 'peak'
+      ? 'M1.5 12.5 5 6.5l3 4 3-4 3.5 6'
+      : 'M1.5 3.5 5 9.5l3-4 3 4 3.5-6'
+  return React.createElement('svg', common, React.createElement('path', { d: curve }))
 }

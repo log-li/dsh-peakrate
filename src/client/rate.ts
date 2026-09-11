@@ -12,32 +12,16 @@ export interface RateState {
   period: Period
   badge: string
   minutesUntilSwitch: number
-  /** 翻转后的状态与其徽章 —— 用于回答「之后变贵还是变便宜」。 */
+  /**
+   * 翻转后的状态与其徽章 —— 只用于 **tooltip**（精确、无歧义）。
+   *
+   * 曾据此算过紧凑的 `↑`/`↓` 方向箭头，**已删除**（2026-09-12 用户判断）：
+   * 除活动态外所有转换本就是二态翻转（在那个对称机制上标方向信息量低），
+   * 而真正需要方向的活动态**算不出来**（徽章是文字，无数字可比）——
+   * **一个时有时无的指示反而制造困惑**。精确信息保留在 tooltip 里。
+   */
   nextPeriod?: Period
   nextBadge?: string
-  /**
-   * 翻转方向：`'up'` = 之后**变贵**、`'down'` = 之后**变便宜**、
-   * `undefined` = 无法判定（任一侧徽章不含数字，如 `Campaign`）。
-   */
-  trend?: 'up' | 'down'
-}
-
-/**
- * 从徽章文案里抽取数字倍率，用于比较涨跌。
- *
- * 数据源的徽章形态混杂：`2×` / `1×` / `0.5×` / `1× credits` / `0.8× credits`，
- * 而活动态是**文字**（`Campaign`）—— 后者抽不出数字，涨跌无法判定，
- * 此时**不猜**，返回 undefined 让 UI 不显示方向箭头。
- *
- * @param badge - 徽章文案。
- * @returns 数字倍率；抽不出时 undefined。
- */
-export function parseMultiplier(badge: string | undefined): number | undefined {
-  if (badge === undefined) return undefined
-  const m = /(\d+(?:\.\d+)?)\s*[×x]/.exec(badge)
-  if (m === null) return undefined
-  const n = Number(m[1])
-  return Number.isFinite(n) ? n : undefined
 }
 
 /**
@@ -69,23 +53,8 @@ export function rateFor(
       : {
           nextPeriod,
           nextBadge: periodBadge(profile, nextPeriod),
-          trend: trendOf(periodBadge(profile, period), periodBadge(profile, nextPeriod)),
         }),
   }
-}
-
-/**
- * 比较两侧徽章的数字倍率，得出涨跌方向。
- *
- * 任一侧抽不出数字（如活动态的 `Campaign`）→ 返回 undefined（**不猜**）。
- */
-function trendOf(current: string, next: string): 'up' | 'down' | undefined {
-  const a = parseMultiplier(current)
-  const b = parseMultiplier(next)
-  if (a === undefined || b === undefined) return undefined
-  if (b > a) return 'up'
-  if (b < a) return 'down'
-  return undefined
 }
 
 /** 取某时段态的徽章文案（活动态缺数据时回退峰时文案，避免渲染出 undefined）。 */
@@ -110,6 +79,20 @@ export function detailText(
   state: RateState,
   formatCountdown: (minutes: number) => string,
 ): string {
+  return detailLines(state, formatCountdown).join('\n')
+}
+
+/**
+ * 详情**分行**输出 —— 供点击展开的面板按行渲染（比整块文本更好排版）。
+ *
+ * @param state - 倍率状态。
+ * @param formatCountdown - 倒计时格式化函数。
+ * @returns 每行一条的详情。
+ */
+export function detailLines(
+  state: RateState,
+  formatCountdown: (minutes: number) => string,
+): string[] {
   const { profile, period, badge } = state
   const currentName = periodName(profile, period)
   const lines = [
@@ -122,12 +105,12 @@ export function detailText(
   lines.push(`峰 ${profile.peakBadge} / 谷 ${profile.offPeakBadge}`)
   const countdown = formatCountdown(state.minutesUntilSwitch)
   if (countdown !== '') {
-    const to =
-      state.nextPeriod === undefined
-        ? ''
-        : `，转为 ${periodName(profile, state.nextPeriod)}（${state.nextBadge ?? ''}）`
-    lines.push(`${countdown} 后${to === '' ? '' : '切换'}${to}`)
+    lines.push(
+      state.nextBadge === undefined
+        ? `${countdown} 后切换`
+        : `${countdown} 后切换 → ${state.nextBadge}`,
+    )
   }
   if (profile.verifiedAt !== undefined) lines.push(`核验于 ${profile.verifiedAt}`)
-  return lines.join('\n')
+  return lines
 }

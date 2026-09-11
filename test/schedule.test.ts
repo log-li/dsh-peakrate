@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parseCatalog } from '../src/catalog.js'
 import { currentPeriod, formatCountdown, type Schedule } from '../src/schedule.js'
-import { parseMultiplier } from '../src/client/rate.js'
 
 /** 数据源里的 ollama-deepseek-v4：UTC 周一–五 12:00-18:00。 */
 const OLLAMA: Schedule = {
@@ -503,17 +502,3 @@ describe('★ nextPeriod —— 让调用方能回答「之后是变贵还是变
   })
 })
 
-describe('★ parseMultiplier / trend —— 涨跌方向判定（不猜）', () => {
-  it('从各类徽章抽取数字倍率', () => {
-    expect(parseMultiplier('2×')).toBe(2)
-    expect(parseMultiplier('1×')).toBe(1)
-    expect(parseMultiplier('0.5×')).toBe(0.5)
-    expect(parseMultiplier('1× credits')).toBe(1)
-    expect(parseMultiplier('0.8× credits')).toBe(0.8)
-  })
-
-  it('文字徽章抽不出数字 → undefined（活动态即此情形）', () => {
-    expect(parseMultiplier('Campaign')).toBeUndefined()
-    expect(parseMultiplier(undefined)).toBeUndefined()
-  })
-})

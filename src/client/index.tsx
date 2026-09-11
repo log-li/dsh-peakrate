@@ -119,6 +119,7 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     return () => clearInterval(timer)
   }, [])
 
+
   if (!props.available) return null
   const current = state.current
   if (current === null) return null
@@ -128,6 +129,10 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
   if (rate === undefined) return null
 
   const countdown = formatCountdown(rate.minutesUntilSwitch)
+  // 详情**只走桌面悬停**（`title`），不做点击面板 —— 用户判断：
+  // 「一般只有开始用时需要看详细信息，之后看图标简略显示就够了」。
+  // 「学一次」的需求由**设置卡片**承担（那里有完整覆盖表 + 规则 + 配置说明），
+  // 徽章只承担「随时扫一眼」。
   return React.createElement(
     'span',
     {
@@ -146,18 +151,6 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
           'span',
           { className: 'dsh-peakrate-chip-countdown' },
           ` · ${countdown}`,
-          rate.trend === undefined
-            ? null
-            : React.createElement(
-                'span',
-                {
-                  className:
-                    rate.trend === 'up'
-                      ? 'dsh-peakrate-trend-up'
-                      : 'dsh-peakrate-trend-down',
-                },
-                rate.trend === 'up' ? ' ↑' : ' ↓',
-              ),
         ),
   )
 }

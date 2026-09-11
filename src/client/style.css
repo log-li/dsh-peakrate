@@ -238,17 +238,6 @@
   padding: 4px 2px 8px;
 }
 
-/* 涨跌方向箭头：与配色语义一致 —— ↓ 之后变便宜（绿）、↑ 之后变贵（橙）。
- * 不要用 --dsw-alias-label-dimmed：实测 rgb(225,229,238)，浅主题下几乎不可见
- * （那是「禁用态」色，不该用于传达信息）。 */
-.dsh-peakrate-trend-down {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.dsh-peakrate-trend-up {
-  color: var(--dsw-alias-state-warn-label);
-}
-
 /* 菜单再宽一点，容纳「倍率 + 倒计时 + 方向」而不裁切 */
 .dsh-peakrate-ms-menu {
   max-width: min(480px, 100vw - 32px);
