@@ -72,9 +72,9 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## What you see
 
-**In the model selector** — open the picker you already use and every row carries the rate that applies to that model at this moment. The same rate stays visible in the composer tool row below, so what you are paying never leaves your sight:
-
-<img src="docs/hero-model-selector.png" width="640" alt="Model selector with per-row rate badges across providers" />
+**In the model selector** — open the picker you already use (the shot at the top), and every row
+carries the rate that applies to that model at this moment. The same rate stays visible in the
+composer tool row below, so what you are paying never leaves your sight.
 
 Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a `0.8× credits` plan, and a limited-time `Campaign` window. Models with no time-based pricing simply carry no badge — that is the honest state, not a missing lookup.
 
