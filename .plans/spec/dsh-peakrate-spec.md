@@ -1,6 +1,6 @@
 # dsh-peakrate — 模型选择器内的峰谷倍率指示插件
 
-Status: proposed
+Status: proposed（阶段 1–4 已实现，待实机验收）
 创建于: 2026-09-11
 最近更新: 2026-09-12
 包名: `dsh-peakrate`
@@ -261,6 +261,32 @@ dsh-peakrate/
 ## 13. 变更历史
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
+
+### 2026-09-12 — 阶段 1–4 实现完成（代码落地）
+
+- **决策**：按 §12 完成阶段 1–4——纯函数核心、host 数据层、client UI、构建与文档。
+  共 83 项单测全绿，typecheck 干净，两半边可构建。
+- **实现中偏离 spec 并已修正的项**：
+  1. **§2 profile 数 12 → 14**：数据源 2026-09-11 版实为 14 个 profile（新增 Qoder
+     系 4 个、Tencent Cloud 2 个、Swarms 1 个）。已在 §2 更正并注明「数量不是契约」。
+  2. **config.modelMappings 的优先级语义**：原实现把用户映射与内置规则放在同一
+     循环里，用户映射仍受 provider 展示名候选集约束，导致「把某 provider 指到
+     官方 profile」这类覆盖静默失效。已改为**用户映射不受候选集限制**（可指向任意
+     profile），内置规则才受约束以防跨 provider 误配。
+  3. **CSS token 名**：初版凭印象写了 `--dsw-color-*` 系列，实际不存在。经 Theme
+     Inspect 核实后改用真实 token（`--dsw-alias-label-primary` / `bg-overlay` /
+     `border-l2` / `state-warn-primary` / `bg-layer-1|2`）。
+- **新增实现细节（spec 未及写明、现补记）**：
+  - 时段判定用 `Intl.DateTimeFormat.formatToParts` 取墙上时间，逐日向后扫描最多 8 天
+    求下一个翻转点，从而天然覆盖跨日 / 跨周末 / 跨午夜窗口。
+  - `parseCatalog` 对坏 profile **逐条丢弃**而非整体拒绝；仅当 schemaVersion 不支持、
+    profiles 非数组/为空、或全部条目非法时才整体返回 undefined（触发沿用旧数据）。
+  - 无峰时天或无峰时窗口的 profile 一律丢弃——它永远不会有峰时，对用户无意义。
+  - 构建用 esbuild（types 用 tsc 单独产出）；**零运行时依赖**，`@types/node` 等
+    全部为 devDependencies。
+- **后续结果**：已 link 安装进 web profile（`dsh.profile.bundles` 加入
+  `dsh-peakrate`，`node_modules/dsh-peakrate` 为符号链接指向项目目录），
+  等待重启后按 §10 实机验收。**验收未完成前本 spec 的 Status 保持 proposed。**
 
 ### 2026-09-12 — 文档体系：plan / spec 分离，spec 转正为活文档
 
