@@ -17,7 +17,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # ⚠ 必须是 Node 24：**npm 可信发布（OIDC）要求 npm ≥ 11.5.1**，
+          # 而 Node 22 自带 npm 10.x → 不会尝试 OIDC，直接 `ENEEDAUTH / need auth`
+          # （2026-09-12 实测：改用 Node 24 前的症状）。
+          node-version: '24'
           cache: npm
         # ⚠ **不要**设 `registry-url`：设了 setup-node 会写出一个含
         # `_authToken=${NODE_AUTH_TOKEN}` 的 .npmrc 并导出占位 NODE_AUTH_TOKEN，
