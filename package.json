@@ -63,6 +63,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   },
