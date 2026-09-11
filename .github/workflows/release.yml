@@ -45,11 +45,22 @@ jobs:
           echo "publishing dsh-peakrate $(node -p 'require("./package.json").version')"
 
       - name: Publish to npm (trusted publishing / OIDC; provenance signs the tarball)
-        run: npm publish --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         # OIDC: trusts the npm Trusted Publisher configured for log-li/dsh-peakrate.
-        # NODE_AUTH_TOKEN is kept as a fallback for token-based publishing.
+        # NODE_AUTH_TOKEN is a fallback for token-based publishing.
+        #
+        # Idempotent on purpose: the very first release of a package has to be
+        # published before its Trusted Publisher can be configured, and re-running
+        # a workflow for an already-published version should not paint the run red.
+        run: |
+          NAME=$(node -p 'require("./package.json").name')
+          VER=$(node -p 'require("./package.json").version')
+          if npm view "$NAME@$VER" version >/dev/null 2>&1; then
+            echo "::notice::$NAME@$VER is already on the registry — skipping publish."
+          else
+            npm publish --provenance
+          fi
 
       - name: Create GitHub Release with changelog
         env:
