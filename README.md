@@ -110,7 +110,7 @@ dsh plugin --profile web add dsh-peakrate
 
 ```bash
 npm install
-npm test          # 89 项单测（纯函数 + 构建产物契约）
+npm test          # 94 项单测（纯函数 + 构建产物契约）
 npm run typecheck
 ```
 
