@@ -205,6 +205,12 @@ export function apply(ctx: Context): void {
     slots.inject('conversation.input.left', () =>
       slots.register(
         {
+          // `name` = 槽位键；`id` = **自己的** cell 键。
+          // 两者都必需：只给 id 时 register 不知道注册到哪个槽位。
+          // 写法对照了三个真实插件的产物（dsh-plugin-memory / dsh-mcp-manager /
+          // dshmarket 注册 settings.section 时均同时传 name + id）。
+          // 自有 id 意味着「加在既有条目旁边」，不会占用别人的单元格。
+          name: 'conversation.input.left',
           id: 'peakrate',
           // 排在既有控件之后，避免挤占原生位置
           order: 50,

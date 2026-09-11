@@ -152,12 +152,13 @@ describe('★ 回归：绝不注册到会遮蔽自带 UI 的槽位', () => {
     expect(regs.map((r) => r.slot)).toEqual(['conversation.input.left'])
   })
 
-  it('用自有 id（list 槽位的纯追加），而不是 name（single 槽位的占用）', () => {
+  it('同时传 name（槽位键）与 id（自有 cell 键）—— 只给 id 无法注册', () => {
     const regs = captureRegistration()
     const opts = regs[0]!.options
+    // name 决定「注册到哪个槽位」，缺了它 register 无从归属
+    expect(opts.name).toBe('conversation.input.left')
+    // id 决定「是追加还是占用别人的单元格」——自有 id = 纯追加
     expect(opts.id).toBe('peakrate')
-    // single 槽位才用 name；用 name 会「占用单元格」
-    expect(opts.name).toBeUndefined()
   })
 
   it('明确不注册到 conversation.input.model（2026-09-12 事故槽位）', () => {
@@ -167,6 +168,13 @@ describe('★ 回归：绝不注册到会遮蔽自带 UI 的槽位', () => {
 })
 
 describe('★ 回归：注册时必须提供 inject 注入面（否则 UI 无数据）', () => {
+  it('options.name 必须与 slots.inject 的槽位键一致（否则注册错位）', () => {
+    const regs = captureRegistration()
+    for (const r of regs) {
+      expect(r.options.name, 'options.name 应与 inject 的槽位键一致').toBe(r.slot)
+    }
+  })
+
   it('register 的 options 带 inject 函数，且能给出非空 profiles', () => {
     const regs = captureRegistration()
     const opts = regs[0]!.options
