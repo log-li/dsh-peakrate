@@ -15,7 +15,7 @@
 [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
 [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-<img src="docs/hero-model-selector.png" width="430" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
+<img src="docs/hero-model-selector.png" width="420" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
 
 </div>
 
@@ -71,11 +71,12 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## 你会看到什么
 
-**模型选择器里** —— 每一行都带该模型此刻适用的倍率，分组与 harness 一致。横跨 8 个 provider 一眼看清整个价格格局，随时切到**此刻最便宜**的那个模型：
+**模型选择器里** —— 每一行都带该模型此刻适用的倍率，分组与 harness 一致。各家按**自己的钟**计费，整个价格格局一眼看清，随时切到**此刻最便宜**的那个模型：
 
-<img src="docs/hero-model-selector.png" width="430" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
+<img src="docs/hero-model-selector.png" width="420" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
 
-没有时段计价的模型**就是不带徽章**（上图里的 Kimi K3、Hy3、Omen Alpha）—— 那是诚实的状态，不是漏查。
+上图里四种倍率形态同时在场：`2×` 峰时、`1×` 与 `0.5×` 谷时、`0.8× credits` 套餐、以及限时的 `Campaign` 活动。
+没有时段计价的模型**就是不带徽章** —— 那是诚实的状态，不是漏查。
 
 **composer 工具行里** —— 当前模型的倍率，始终可见：
 

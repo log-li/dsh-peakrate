@@ -15,7 +15,7 @@
 [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
 [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-<img src="docs/hero-model-selector.png" width="430" alt="Rate badges on every model across every provider in the model selector" />
+<img src="docs/hero-model-selector.png" width="420" alt="Rate badges on every model across every provider in the model selector" />
 
 </div>
 
@@ -71,11 +71,11 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## What you see
 
-**In the model selector** — every row carries the rate that applies to that model at this moment, grouped exactly as the harness groups them. Across eight providers you can see the whole price landscape at once and switch to whichever model is cheapest *right now*:
+**In the model selector** — every row carries the rate that applies to that model at this moment, grouped exactly as the harness groups them. Providers bill on different clocks, so the whole price landscape is visible at once and you can switch to whichever model is cheapest *right now*:
 
-<img src="docs/hero-model-selector.png" width="430" alt="Model selector with per-row rate badges across providers" />
+<img src="docs/hero-model-selector.png" width="420" alt="Model selector with per-row rate badges across providers" />
 
-Models with no time-based pricing simply carry no badge (Kimi K3, Hy3, Omen Alpha above) — that is the honest state, not a missing lookup.
+Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a `0.8× credits` plan, and a limited-time `Campaign` window. Models with no time-based pricing simply carry no badge — that is the honest state, not a missing lookup.
 
 **In the composer tool row** — the current model's rate, always visible:
 
