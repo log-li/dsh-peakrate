@@ -1,82 +1,41 @@
 /**
- * client 半边：在 composer 工具行左侧**追加**一个紧凑倍率徽章，显示**当前模型**
- * 的峰谷状态、倍率与切换倒计时。
+ * client 半边入口。注册**两个互补**的呈现：
  *
- * **为什么是追加而不是替换**（2026-09-12 事故修订）：
- * `conversation.input.model` 是 `single` + `replaceRisk: shadows-shipped-ui` 槽位，
- * 注册即**遮蔽自带模型选择器**。本插件曾用它做「替换选择器」，但替换实现残缺
- * （无 effort 选择、无加载/错误态），**直接导致用户无法切换模型**。
- * 现改为注册到 `conversation.input.left`——list 槽位、`replaceRisk: none`、
- * 用自有 `id` 做纯追加，**完全不碰自带 UI**。
+ * 1. `conversation.input.left`（list · `replaceRisk: none`）——
+ *    **追加式**的当前模型徽章：免开菜单即可见倍率与倒计时。
+ * 2. `conversation.input.model`（single · shadows-shipped-ui）——
+ *    **完整移植的官方模型选择器 + 每行倍率徽章**：展开菜单时逐行对比各模型峰谷。
  *
- * 数据来源也从「构建期快照」改为**只读共享的 `ctx.modelDirectories`**（官方
- * client 服务，与自带选择器同一实例），因此当前模型的判定天然与选择器一致。
+ * 两者并存：原显示（工具行徽章）保留不动，菜单内**新增**逐行倍率。
+ *
+ * 数据来源：只读共享的官方 `ctx.modelDirectories`（与 `/model` 弹窗同一实例），
+ * 因此判定天然与选择器一致。
+ *
+ * ⚠️ 关于第 2 项的历史教训：本插件曾用**残缺的**替换实现接管该槽位，导致用户
+ * 无法切换模型。现要求「**功能超集**」——官方有的交互必须全部保留（见
+ * `ModelSelect.tsx` 的移植纪律）。守卫测试见 `test/bundle-contract.test.ts`。
  */
 import * as React from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import { currentPeriod, formatCountdown } from '../schedule.js'
-import { matchProfile, type MatchConfig, type RateProfile } from '../matching.js'
-
-/** 当前模型在某时刻的倍率状态。 */
-export interface RateState {
-  profile: RateProfile
-  period: 'peak' | 'offPeak'
-  badge: string
-  minutesUntilSwitch: number
-}
+import { formatCountdown } from '../schedule.js'
+import type { MatchConfig, RateProfile } from '../matching.js'
+import { rateFor, badgeIcon, detailText } from './rate.js'
+import { ModelSelect, type DirectoryState } from './ModelSelect.js'
 
 /**
- * 计算某模型此刻的倍率状态；未匹配返回 undefined（UI 什么都不显示）。
+ * 已知会遮蔽自带 UI、但本插件**有意接管**的槽位（附接管理由）。
  *
- * @param provider - DSH provider id。
- * @param model - provider 原始模型 id。
- * @param profiles - 可用 profile 列表。
- * @param config - 别名与归属覆盖。
- * @param now - 判定基准时刻。
+ * 守卫测试 `test/bundle-contract.test.ts` 会读取此清单：清单**之外**的
+ * shadowing 槽位一律禁止注册；列在这里的必须满足「功能超集」。
  */
-export function rateFor(
-  provider: string,
-  model: string,
-  profiles: RateProfile[],
-  config: MatchConfig,
-  now: Date,
-): RateState | undefined {
-  const profile = matchProfile(provider, model, profiles, config)
-  if (profile === undefined) return undefined
-  const { period, minutesUntilSwitch } = currentPeriod(profile.schedule, now)
-  return {
-    profile,
-    period,
-    badge: period === 'peak' ? profile.peakBadge : profile.offPeakBadge,
-    minutesUntilSwitch,
-  }
+export const INTENTIONALLY_SHADOWED: Record<string, string> = {
+  'conversation.input.model':
+    '完整移植官方模型选择器 + 每行倍率徽章（用户要求在菜单内一览各模型倍率）。' +
+    '官方组件不声明 children、组件内 0 处 renderSlot —— 无扩展点，只能重写。' +
+    '移植纪律见 ModelSelect.tsx：官方交互（键盘/aria/portal/toast/effort/错误态）全保留。',
 }
 
-/** 徽章图标：峰时闪电、谷时月亮。 */
-export function badgeIcon(period: 'peak' | 'offPeak'): string {
-  return period === 'peak' ? '⚡' : '🌙'
-}
-
-/**
- * 构建悬停详情：当前时段名 + 倍率对照 + 倒计时 + 核验日期。
- *
- * @param state - 该模型的倍率状态。
- */
-export function detailText(state: RateState): string {
-  const { profile, period, badge } = state
-  const currentName = period === 'peak' ? profile.peakName : profile.offPeakName
-  const lines = [
-    `${profile.providerName} · ${profile.modelLabel}`,
-    `当前：${currentName}（${badge}）`,
-    `峰 ${profile.peakBadge} / 谷 ${profile.offPeakBadge}`,
-  ]
-  const countdown = formatCountdown(state.minutesUntilSwitch)
-  if (countdown !== '') lines.push(`${countdown} 后切换`)
-  if (profile.verifiedAt !== undefined) lines.push(`核验于 ${profile.verifiedAt}`)
-  return lines.join('\n')
-}
-
-/** 注入面：构建期打包进 client 的数据。 */
+/** 注入面：构建期打包进 client 的 profile 快照。 */
 interface PeakrateFace {
   profiles: () => RateProfile[]
   config: () => MatchConfig
@@ -85,13 +44,11 @@ interface PeakrateFace {
 /**
  * 默认注入面：**构建期打包进 client 的 profile 快照**。
  *
- * 为什么不是从 host 服务读：DSH 的 host 树与 client 树是两套独立 cordis 实例，
- * client 侧拿不到 host 的 `ctx.get('peakrate')`。因此 client 自带一份快照
- * （由 `scripts/build-client.mjs` 用 `define` 注入），保证 UI 立即可用。
+ * host 树与 client 树是两套独立 cordis 实例，client 侧拿不到 host 的
+ * `ctx.get('peakrate')`，故由 `scripts/build-client.mjs` 用 `define` 注入。
  *
- * ⚠️ **已知限制**：`config.providerAliases` / `modelMappings` / `customProfiles`
- * 目前只在 host 侧生效（影响 CatalogStore），**不影响 client 渲染**——client
- * 用的是打包快照 + 内置映射。详见 README「已知限制」与 spec §6。
+ * ⚠️ 已知限制：`providerAliases` / `modelMappings` / `customProfiles` 目前只在
+ * host 侧生效，不影响 UI 渲染（client 用打包快照 + 内置映射）。见 README。
  */
 declare const __PEAKRATE_PROFILES__: RateProfile[] | undefined
 
@@ -104,24 +61,22 @@ const DEFAULT_FACE: PeakrateFace = {
   config: () => ({}),
 }
 
-/** 组件注入面：来自官方 `modelDirectories` 服务的**只读**句柄。 */
+/* ------------------------------------------------------------------ *
+ * 追加式徽章（conversation.input.left）
+ * ------------------------------------------------------------------ */
+
+/** 组件注入面：来自官方 `modelDirectories` 的**只读**句柄。 */
 interface ChipProps {
-  /** 该 session 是否支持 Agent 绑定的模型操作（子代理会话为 false）。 */
   available: boolean
-  /** 会话共享的模型目录 store（与自带选择器同一实例）。 */
   directory: {
-    getSnapshot: () => {
-      current: { provider: string; model: string } | null
-    }
+    getSnapshot: () => { current: { provider: string; model: string } | null }
     subscribe: (fn: () => void) => () => void
   }
-  /** 构建期注入的数据面。 */
   peakrate?: PeakrateFace
 }
 
 /**
  * 紧凑倍率徽章：显示**当前模型**的倍率与倒计时。
- *
  * 未匹配的模型**什么都不渲染**（返回 null，无占位、无灰字）。
  *
  * @param props - 注入面 + 共享模型目录。
@@ -133,14 +88,12 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
   )
   // 每 30 秒重算一次，让倒计时保持新鲜
   const [now, setNow] = React.useState(() => new Date())
-
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(timer)
   }, [])
 
   if (!props.available) return null
-
   const current = state.current
   if (current === null) return null
 
@@ -153,7 +106,7 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     'span',
     {
       className: `dsh-peakrate-chip dsh-peakrate-${rate.period}`,
-      title: detailText(rate),
+      title: detailText(rate, formatCountdown),
     },
     React.createElement(
       'span',
@@ -162,46 +115,96 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     ),
     countdown === ''
       ? null
-      : React.createElement(
-          'span',
-          { className: 'dsh-peakrate-chip-countdown' },
-          ` · ${countdown}`,
-        ),
+      : React.createElement('span', { className: 'dsh-peakrate-chip-countdown' }, ` · ${countdown}`),
   )
 }
 
+/* ------------------------------------------------------------------ *
+ * 文案（本插件自己的 locale 命名空间，措辞对照官方）
+ * ------------------------------------------------------------------ */
+
+const NS = 'peakrate-model'
+const zh: Record<string, string> = {
+  'trigger.fallback': '选择模型',
+  'trigger.loading': '正在加载模型…',
+  'trigger.selectAria': '选择模型',
+  'trigger.aria': '选择模型，当前 {model}',
+  'trigger.ariaEffort': '选择模型，当前 {model}，推理等级 {effort}',
+  'menu.aria': '模型与推理等级',
+  'menu.model': '模型',
+  'menu.effort': '推理等级',
+  'effort.providerDefault': 'Default',
+  'status.loading': '正在刷新模型列表…',
+  'error.action': '模型操作失败：{message}',
+  retry: '重新加载',
+  'action.reload': '重新加载',
+  'warning.groupLoad': '{name} 加载失败：{message}',
+  'empty.models': '没有可用的模型。',
+  'empty.efforts': '当前模型未提供推理等级。',
+}
+const en: Record<string, string> = {
+  'trigger.fallback': 'Select model',
+  'trigger.loading': 'Loading models…',
+  'trigger.selectAria': 'Select model',
+  'trigger.aria': 'Select model, current {model}',
+  'trigger.ariaEffort': 'Select model, current {model}, effort {effort}',
+  'menu.aria': 'Model and reasoning effort',
+  'menu.model': 'Model',
+  'menu.effort': 'Reasoning effort',
+  'effort.providerDefault': 'Default',
+  'status.loading': 'Refreshing model list…',
+  'error.action': 'Model action failed: {message}',
+  retry: 'Reload',
+  'action.reload': 'Reload',
+  'warning.groupLoad': '{name} failed to load: {message}',
+  'empty.models': 'No models available.',
+  'empty.efforts': 'This model provides no reasoning effort.',
+}
+
 /**
- * client 侧注入作用域上本插件用到的服务。
+ * 极简翻译器：按 `{name}` 插值；未知 key 原样返回（便于发现漏配）。
  *
- * 用**属性**（而非 `get()`）读取：属性访问才会把服务代理绑定到调用方上下文。
+ * @param dict - 语言字典。
+ * @param key - 文案键。
+ * @param params - 插值参数。
  */
+function translate(
+  dict: Record<string, string>,
+  key: string,
+  params?: Record<string, unknown>,
+): string {
+  const template = dict[key]
+  if (template === undefined) return key
+  if (params === undefined) return template
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`))
+}
+
+/** 注入作用域上本插件用到的服务（**属性**访问，理由见 apply 的注释）。 */
 interface ClientScope {
   slots?: unknown
   modelDirectories?: unknown
   sessions?: unknown
+  locale?: {
+    register: (ns: string, dict: Record<string, Record<string, string>>) => void
+    bind: (ns: string) => (key: string, params?: Record<string, unknown>) => string
+  }
 }
 
 /**
- * client 插件入口：在 composer 工具行左侧**追加**倍率徽章。
+ * client 插件入口：注册工具行徽章 + fork 的模型选择器。
  *
- * 注册要点（决定「追加」还是「替换」）：
- * - `conversation.input.left` 是 **list** 槽位 → 用 `id` 注册；
- * - `id: 'peakrate'` 是**自有 id** → 纯追加，不占用任何既有单元格；
- * - **绝不**注册到 `conversation.input.model`（single + shadows-shipped-ui）。
+ * 注册要点：
+ * - 用**属性访问**取服务（`scope.slots`），不用 `ctx.get()`——cordis 服务代理
+ *   只在属性访问时把 `this.ctx` 绑定到调用方上下文，否则内部依赖解析不到；
+ * - `conversation.input.left` 是 **list** 槽位 → 用 `id` 做纯追加；
+ * - `conversation.input.model` 是 **single** 槽位 → 用 `name` 接管（有意为之）。
  *
  * @param ctx - client cordis 上下文。
  */
 export function apply(ctx: Context): void {
-  ctx.inject(['slots', 'modelDirectories'], (injected) => {
-    // 注入作用域：用 Context 转成我们只需要的那几个服务
+  ctx.inject(['slots', 'sessions', 'modelDirectories', 'locale'], (injected) => {
     const scope = injected as unknown as ClientScope
-    // ⚠️ **必须用属性访问**（`scope.slots`），不能用 `scope.get('slots')`。
-    //
-    // cordis 的服务代理会把 `this.ctx` 绑定到**调用方的上下文**，而该绑定只在
-    // 属性访问时生效；`get()` 拿到的是未绑定的实例，其内部依赖（如
-    // `modelDirectories.directoryFor()` 用到的 `remote.session`）会解析不到，
-    // 抛 `cannot get property "remote.session" without inject`。
-    // 实测（2026-09-12）：用 get() 时页面报错；改属性访问后消失。
+
     const slots = scope.slots as
       | {
           inject: (key: string, cb: () => () => void) => void
@@ -209,7 +212,20 @@ export function apply(ctx: Context): void {
         }
       | undefined
     const models = scope.modelDirectories as
-      | { directoryFor: (sessionId: string) => { store: ChipProps['directory'] } }
+      | {
+          directoryFor: (sessionId: string) => {
+            store: {
+              getSnapshot: () => DirectoryState
+              subscribe: (fn: () => void) => () => void
+            }
+            load: () => Promise<unknown>
+            select: (s: {
+              provider: string
+              model: string
+              reasoningEffort?: string
+            }) => Promise<void>
+          }
+        }
       | undefined
     const sessions = scope.sessions as
       | { subagentAddress: (sessionId: string) => unknown }
@@ -217,17 +233,26 @@ export function apply(ctx: Context): void {
 
     if (slots === undefined || models === undefined || sessions === undefined) return
 
+    // 本插件自己的文案命名空间（locale 不可用时回退内置中文，不影响功能）
+    let t: (key: string, params?: Record<string, unknown>) => string = (key, params) =>
+      translate(zh, key, params)
+    const locale = scope.locale
+    if (locale !== undefined) {
+      try {
+        locale.register(NS, { zh, en })
+        t = locale.bind(NS)
+      } catch {
+        /* 回退到内置中文 */
+      }
+    }
+
+    // ① 追加式徽章：list 槽位，自有 id = 纯追加
     slots.inject('conversation.input.left', () =>
       slots.register(
         {
-          // `name` = 槽位键；`id` = **自己的** cell 键。
-          // 两者都必需：只给 id 时 register 不知道注册到哪个槽位。
-          // 写法对照了三个真实插件的产物（dsh-plugin-memory / dsh-mcp-manager /
-          // dshmarket 注册 settings.section 时均同时传 name + id）。
-          // 自有 id 意味着「加在既有条目旁边」，不会占用别人的单元格。
+          // `name` = 槽位键；`id` = 自己的 cell 键，两者都必需
           name: 'conversation.input.left',
           id: 'peakrate',
-          // 排在既有控件之后，避免挤占原生位置
           order: 50,
           inject: (sessionId: string) => {
             const directory = models.directoryFor(sessionId)
@@ -241,26 +266,67 @@ export function apply(ctx: Context): void {
         PeakrateChip,
       ),
     )
+
+    // ② fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
+    slots.inject('conversation.input.model', () =>
+      slots.register(
+        {
+          name: 'conversation.input.model',
+          // ★ single 槽位的遮蔽规则：**同一优先级只能有一个注册**（官方占 0），
+          //   且条目按 priority **升序**排列、single 只取第一个 → **最低者渲染**。
+          //   因此必须给一个比 0 更低的优先级才能盖过官方实现。
+          //   （不给 priority 会直接抛错：single slot already has a registration
+          //    at priority 0 (registered by Z8) — register at a different priority）
+          priority: -1,
+          inject: (sessionId: string) => {
+            const directory = models.directoryFor(sessionId)
+            const available = sessions.subagentAddress(sessionId) === undefined
+            return {
+              available,
+              directory: directory.store,
+              load: () => {
+                if (available) void directory.load().catch(() => {})
+              },
+              select: (selection: {
+                provider: string
+                model: string
+                reasoningEffort?: string
+              }) =>
+                available
+                  ? directory.select(selection).then(
+                      () => true,
+                      () => false,
+                    )
+                  : Promise.resolve(false),
+              peakrate: DEFAULT_FACE,
+              t,
+            }
+          },
+        },
+        ModelSelect,
+      ),
+    )
   })
 }
+
+// 供构建产物契约测试断言端到端判定（产物里必须能取到同一个判定函数）
+export { rateFor } from './rate.js'
 
 export const name = 'dsh-peakrate-client'
 
 /**
- * 插件级 inject —— **必须与官方 `dsh-client-ui-model-selection` 对齐**。
+ * 插件级 inject —— 与官方 `dsh-client-ui-model-selection` 对齐。
  *
- * 关键项：
- * - `modelDirectories`：本插件消费的模型目录服务（官方插件负责 provide）；
- * - `sessions`：`subagentAddress()` 判断当前是否为子代理会话；
- * - `remote` + **`remote.session`**：`modelDirectories.directoryFor()` 内部要
- *   解析会话的模型选择投影，缺了它们会在**运行时**抛
- *   `cannot get property "remote.session" without inject`
- *   （纯函数单测发现不了，只有实机浏览器能暴露）。
+ * - `modelDirectories.directoryFor()` 内部依赖 **`remote.session`**，缺了它会在
+ *   **运行时**抛 `cannot get property "remote.session" without inject`
+ *   （纯函数单测与服务端产物均正常，只有真实浏览器能暴露）；
+ * - `locale` 用于注册本插件自己的文案命名空间。
  */
 export const inject = [
   'slots',
   'sessions',
   'modelDirectories',
+  'locale',
   'remote',
   'remote.session',
 ]

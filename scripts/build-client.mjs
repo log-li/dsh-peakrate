@@ -40,7 +40,8 @@ const result = await build({
   bundle: true,
   platform: 'browser',
   format: 'cjs',
-  external: ['react', '@deepseek-ai/*'],
+  // 与官方 client 的 require 清单对齐：react / react-dom / jsx-runtime / primitives
+  external: ['react', 'react/jsx-runtime', 'react-dom', '@deepseek-ai/*'],
   loader: { '.css': 'text' },
   define: {
     __PEAKRATE_PROFILES__: JSON.stringify(parsed.profiles),

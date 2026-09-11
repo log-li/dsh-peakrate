@@ -93,6 +93,19 @@ dsh-peakrate/
   （`scope.slots`）时把 `this.ctx` 绑定到调用方上下文；`get()` 拿到未绑定实例，
   其内部依赖解析不到。用 `scope.get('modelDirectories')` 实测会触发上面的报错。
 
+- **★ 想遮蔽 `single` 槽位必须给 `priority`，且要**低于**对方**（2026-09-12 实测）：
+  `single` 槽位**同一优先级只允许一个注册**，官方占 `0`；不给 `priority` 会直接抛
+  `single slot "X" already has a registration at priority 0 (registered by Z8)
+  — register at a different priority to shadow it (lowest renders)`。
+  源码语义（`dsh-web-frontend` 的 slots 实现）：
+  ```js
+  p.sort(kind === 'list'
+    ? (a, b) => priority - priority || order - order
+    : (a, b) => priority - priority)   // single/keyed：按 priority 升序
+  ```
+  条目按 priority **升序**排列，而 `entriesOfSlot` 对 single **只取第一个**
+  → **优先级最低者渲染**。所以遮蔽官方（0）要用 **`priority: -1`**。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：

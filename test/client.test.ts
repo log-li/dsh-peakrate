@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { rateFor } from '../src/client/index.js'
+import { rateFor } from '../src/client/rate.js'
 import { parseCatalog } from '../src/catalog.js'
 
 const snapshotPath = fileURLToPath(new URL('../data/pricing.json', import.meta.url))

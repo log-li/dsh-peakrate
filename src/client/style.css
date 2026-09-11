@@ -7,10 +7,15 @@
  *   state-error-primary / state-success-primary / state-warn-primary /
  *   specific-sidebar-fill
  *
- * 2026-09-12 精简：不再替换模型选择器，只保留 composer 工具行内的紧凑徽章样式。
+ * 两部分：
+ *   1. `dsh-peakrate-chip*`  —— composer 工具行的当前模型徽章（免开菜单，追加式）
+ *   2. `dsh-peakrate-ms-*`   —— fork 的模型选择器（移植官方 + 每行倍率徽章）
  */
 
-/* 紧凑倍率徽章：位于 composer 工具行左侧，紧邻模型选择器 */
+/* ------------------------------------------------------------------ *
+ * 1) 工具行徽章
+ * ------------------------------------------------------------------ */
+
 .dsh-peakrate-chip {
   display: inline-flex;
   align-items: center;
@@ -25,13 +30,11 @@
   user-select: none;
 }
 
-/* 峰时：警示色 + 次级底 */
 .dsh-peakrate-peak {
   color: var(--dsw-alias-state-warn-primary);
   background: var(--dsw-alias-bg-layer-2);
 }
 
-/* 谷时：次级文字色 + 更弱的底 */
 .dsh-peakrate-offPeak {
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-layer-1);
@@ -43,4 +46,237 @@
 
 .dsh-peakrate-chip-countdown {
   color: var(--dsw-alias-label-secondary);
+}
+
+/* ------------------------------------------------------------------ *
+ * 2) fork 的模型选择器（dsh-peakrate-ms-*）
+ * ------------------------------------------------------------------ */
+
+.dsh-peakrate-ms-root {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* 触发器：图标 + 模型名 + 推理等级 + 折叠箭头 */
+.dsh-peakrate-ms-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+  padding: 4px 6px;
+  max-width: 100%;
+}
+
+.dsh-peakrate-ms-trigger:hover {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dsh-peakrate-ms-trigger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.dsh-peakrate-ms-triggerIcon {
+  flex: none;
+  opacity: 0.8;
+}
+
+.dsh-peakrate-ms-triggerLabel {
+  color: var(--dsw-alias-label-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-peakrate-ms-triggerEffort {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.dsh-peakrate-ms-chevron {
+  flex: none;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+
+.dsh-peakrate-ms-chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* 菜单卡片（portal 到 body，位置由内联 style 计算） */
+.dsh-peakrate-ms-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 260px;
+  max-width: min(440px, calc(100vw - 24px));
+  max-height: min(60vh, 520px);
+  overflow: hidden auto;
+  background: var(--dsw-alias-bg-overlay);
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  padding: 6px;
+}
+
+/* 根面板的「模型 / 推理等级」两行 */
+.dsh-peakrate-ms-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.dsh-peakrate-ms-cell:hover {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dsh-peakrate-ms-cellLabel {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dsh-peakrate-ms-cellValue {
+  flex: 1;
+  color: var(--dsw-alias-label-secondary);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-peakrate-ms-cellChevron {
+  flex: none;
+  opacity: 0.6;
+}
+
+/* 分组与标题 */
+.dsh-peakrate-ms-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dsh-peakrate-ms-groupTitle {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.75em;
+  padding: 8px 10px 4px;
+}
+
+/* 选项行：模型名 | 倍率徽章 | 选中勾 */
+.dsh-peakrate-ms-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.dsh-peakrate-ms-option:hover {
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.dsh-peakrate-ms-option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.dsh-peakrate-ms-selected {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dsh-peakrate-ms-optionCopy {
+  flex: 1;
+  min-width: 0;
+}
+
+.dsh-peakrate-ms-modelName {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 每行的倍率徽章（本插件的增量） */
+.dsh-peakrate-ms-rate {
+  flex: none;
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.dsh-peakrate-ms-rateCountdown {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.dsh-peakrate-ms-check {
+  flex: none;
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--dsw-alias-brand-primary);
+}
+
+/* 状态 / 错误 / 警告 / 重试 / 空态 */
+.dsh-peakrate-ms-status,
+.dsh-peakrate-ms-empty {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.85em;
+  padding: 10px;
+}
+
+.dsh-peakrate-ms-error,
+.dsh-peakrate-ms-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.dsh-peakrate-ms-error span,
+.dsh-peakrate-ms-warning span {
+  flex: 1;
+  min-width: 0;
+}
+
+.dsh-peakrate-ms-retry {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 0.95em;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.dsh-peakrate-ms-retry:hover {
+  background: var(--dsw-alias-bg-layer-2);
 }

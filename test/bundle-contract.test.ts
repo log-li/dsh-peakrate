@@ -37,6 +37,11 @@ const SHADOWING_SLOTS = [
 ]
 
 /** 在模拟浏览器环境下执行 client bundle，返回其导出的模块。 */
+/** 从**构建产物**读取「有意接管」清单（保证断言对象与线上一致）。 */
+function intentionalShadowing(): Record<string, string> {
+  return (loadBundle().INTENTIONALLY_SHADOWED ?? {}) as Record<string, string>
+}
+
 function loadBundle(): Record<string, unknown> {
   const code = readFileSync(clientBundle, 'utf8')
   const fakeReact = {
@@ -160,18 +165,29 @@ describe('client bundle 格式契约', () => {
   })
 })
 
-describe('★ 回归：绝不注册到会遮蔽自带 UI 的槽位', () => {
-  it('注册的槽位不在 SHADOWING_SLOTS 中', () => {
+describe('★ 回归：绝不【意外】注册到会遮蔽自带 UI 的槽位', () => {
+  it('除「有意接管」清单外，不得注册任何 shadowing 槽位', () => {
     const regs = captureRegistration()
     expect(regs.length).toBeGreaterThan(0)
+    const allowed = Object.keys(intentionalShadowing())
     for (const r of regs) {
+      if (allowed.includes(r.slot)) continue
       expect(SHADOWING_SLOTS, `禁止注册到遮蔽槽位：${r.slot}`).not.toContain(r.slot)
     }
   })
 
-  it('注册到 conversation.input.left（list · replaceRisk: none）', () => {
+  it('「有意接管」的槽位必须写明理由（防止无理由遮蔽）', () => {
+    for (const [slot, reason] of Object.entries(intentionalShadowing())) {
+      expect(reason.length, `${slot} 必须写明接管理由`).toBeGreaterThan(20)
+    }
+  })
+
+  it('注册到 conversation.input.left（追加）与 conversation.input.model（有意接管）', () => {
     const regs = captureRegistration()
-    expect(regs.map((r) => r.slot)).toEqual(['conversation.input.left'])
+    expect(regs.map((r) => r.slot).sort()).toEqual([
+      'conversation.input.left',
+      'conversation.input.model',
+    ])
   })
 
   it('同时传 name（槽位键）与 id（自有 cell 键）—— 只给 id 无法注册', () => {
@@ -183,9 +199,11 @@ describe('★ 回归：绝不注册到会遮蔽自带 UI 的槽位', () => {
     expect(opts.id).toBe('peakrate')
   })
 
-  it('明确不注册到 conversation.input.model（2026-09-12 事故槽位）', () => {
+  it('接管 conversation.input.model 时必须同时保留工具行徽章（两者互补）', () => {
     const regs = captureRegistration()
-    expect(regs.some((r) => r.slot === 'conversation.input.model')).toBe(false)
+    expect(regs.some((r) => r.slot === 'conversation.input.model')).toBe(true)
+    // 原显示不被替换：追加式徽章必须仍在
+    expect(regs.some((r) => r.slot === 'conversation.input.left')).toBe(true)
   })
 })
 
