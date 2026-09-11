@@ -309,6 +309,36 @@ dsh-peakrate/
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
 
+### 2026-09-12 — 隔离实例实机验证：捕获 `remote.session` 运行时报错
+
+- **方法（重要实践）**：不再拿用户正在用的实例试错，而是用
+  `dsh --profile peakrate-test --from-default-profile web` 新建**独立 profile**，
+  逐项软链复用原 profile 的包（**原 profile 零改动**），在 **3099** 端口独立启动，
+  再用 Playwright 无头浏览器截图 + 交互验证。
+- **捕获的缺陷（纯函数单测无法发现）**：
+  1. 页面报 `cannot get property "remote.session" without inject`，堆栈直指
+     `modelDirectories.directoryFor()`。
+  2. **根因**：`modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，
+     依赖 `remote.session`。官方 `dsh-client-ui-model-selection` 的插件级
+     `inject` 是 `["commandUi","locale","sessions","slots","remote","remote.session"]`
+     —— 含 **`remote.session`**；本插件只声明了 `["slots","modelDirectories"]`。
+  3. **附带发现**：取服务必须用**属性访问**（`scope.slots`）而非 `scope.get('slots')`
+     —— cordis 服务代理只在属性访问时把 `this.ctx` 绑定到调用方上下文。
+- **修复**：插件级 `inject` 补为
+  `['slots','sessions','modelDirectories','remote','remote.session']`；
+  服务一律属性访问。并新增静态契约断言（inject 必须含这 5 项）防回归。
+- **验证结果**（3099 隔离实例，Playwright 实测）：
+  - 徽章渲染：`🌙1× · 2d 11h`，hover 详情正确；
+  - **自带模型选择器完全可用**：菜单展开、按 provider 分组列出全部模型
+    （DeepSeek 4 / xiaomi 2 / Ollama 若干）、当前项带 ✓；
+  - **页面错误：0**（修复前为 1）。
+  - 数值正确性核对：Fri 13:44 UTC 对 `deepseek-v4`（UTC 01:00-04:00 & 06:00-10:00）
+    → 确为 offPeak，下一翻转点周一 01:00 = 2d 11h ✅
+- **教训**：
+  - **必须用真实浏览器验证 client 插件**——服务端「产物存在」不等于「运行时无错」。
+  - **注入依赖要对照官方同类插件的 `inject` 清单**，不要凭需要猜。
+  - **隔离实例验证**应成为 client 插件发布前的标准动作：不拿用户的日常工具试错。
+
 ### 2026-09-12 — 实机事故：遮蔽自带模型选择器致用户无法切换模型（载体方案推翻重做）
 
 - **事故**：插件注册到 `conversation.input.model`（single +

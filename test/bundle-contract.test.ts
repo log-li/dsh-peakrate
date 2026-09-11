@@ -93,19 +93,24 @@ function captureWith(sessions: {
       return () => {}
     },
   }
-  const services: Record<string, unknown> = {
-    slots,
-    modelDirectories: {
-      directoryFor: () => ({
-        store: { getSnapshot: () => ({ current: null }), subscribe: () => () => {} },
-      }),
-    },
-    sessions,
+  const modelDirectories = {
+    directoryFor: () => ({
+      store: { getSnapshot: () => ({ current: null }), subscribe: () => () => {} },
+    }),
   }
 
+  // 注入作用域：**以属性**暴露服务（cordis 的服务代理要求属性访问才绑定调用方
+  // 上下文；实现里也因此不能用 get()，否则运行时抛 remote.session 缺 inject）。
   const fakeCtx = {
-    inject: (_deps: string[], cb: (scope: { get: (n: string) => unknown }) => void) => {
-      cb({ get: (n: string) => services[n] })
+    inject: (
+      _deps: string[],
+      cb: (scope: {
+        slots: unknown
+        modelDirectories: unknown
+        sessions: unknown
+      }) => void,
+    ) => {
+      cb({ slots, modelDirectories, sessions })
     },
   }
   mod.apply(fakeCtx)
@@ -135,6 +140,23 @@ describe('client bundle 格式契约', () => {
     const mod = loadBundle()
     expect(typeof mod.apply).toBe('function')
     expect(mod.name).toBe('dsh-peakrate-client')
+  })
+
+  /** ★ 回归：插件级 inject 必须包含 modelDirectories 运行所需的依赖。
+   *
+   * `modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，依赖
+   * `remote.session`。缺了它会在**浏览器运行时**抛
+   * `cannot get property "remote.session" without inject`——纯函数单测抓不到，
+   * 只有实机浏览器能暴露（2026-09-12 实测：徽章渲染 + 该错误同时出现）。
+   * 这里把依赖固化成静态断言。
+   */
+  it('inject 列表含 slots / sessions / modelDirectories / remote.session', () => {
+    const mod = loadBundle()
+    const inject = mod.inject as string[]
+    expect(Array.isArray(inject)).toBe(true)
+    for (const dep of ['slots', 'sessions', 'modelDirectories', 'remote', 'remote.session']) {
+      expect(inject, `inject 缺少 ${dep}`).toContain(dep)
+    }
   })
 })
 

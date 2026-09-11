@@ -170,9 +170,15 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
   )
 }
 
-/** client 侧 `ctx` 上本插件用到的服务的最小结构。 */
+/**
+ * client 侧注入作用域上本插件用到的服务。
+ *
+ * 用**属性**（而非 `get()`）读取：属性访问才会把服务代理绑定到调用方上下文。
+ */
 interface ClientScope {
-  get: (name: string) => unknown
+  slots?: unknown
+  modelDirectories?: unknown
+  sessions?: unknown
 }
 
 /**
@@ -186,17 +192,26 @@ interface ClientScope {
  * @param ctx - client cordis 上下文。
  */
 export function apply(ctx: Context): void {
-  ctx.inject(['slots', 'modelDirectories'], (scope: ClientScope) => {
-    const slots = scope.get('slots') as
+  ctx.inject(['slots', 'modelDirectories'], (injected) => {
+    // 注入作用域：用 Context 转成我们只需要的那几个服务
+    const scope = injected as unknown as ClientScope
+    // ⚠️ **必须用属性访问**（`scope.slots`），不能用 `scope.get('slots')`。
+    //
+    // cordis 的服务代理会把 `this.ctx` 绑定到**调用方的上下文**，而该绑定只在
+    // 属性访问时生效；`get()` 拿到的是未绑定的实例，其内部依赖（如
+    // `modelDirectories.directoryFor()` 用到的 `remote.session`）会解析不到，
+    // 抛 `cannot get property "remote.session" without inject`。
+    // 实测（2026-09-12）：用 get() 时页面报错；改属性访问后消失。
+    const slots = scope.slots as
       | {
           inject: (key: string, cb: () => () => void) => void
           register: (options: Record<string, unknown>, component: unknown) => () => void
         }
       | undefined
-    const models = scope.get('modelDirectories') as
+    const models = scope.modelDirectories as
       | { directoryFor: (sessionId: string) => { store: ChipProps['directory'] } }
       | undefined
-    const sessions = scope.get('sessions') as
+    const sessions = scope.sessions as
       | { subagentAddress: (sessionId: string) => unknown }
       | undefined
 
@@ -230,4 +245,22 @@ export function apply(ctx: Context): void {
 }
 
 export const name = 'dsh-peakrate-client'
-export const inject = ['slots', 'modelDirectories']
+
+/**
+ * 插件级 inject —— **必须与官方 `dsh-client-ui-model-selection` 对齐**。
+ *
+ * 关键项：
+ * - `modelDirectories`：本插件消费的模型目录服务（官方插件负责 provide）；
+ * - `sessions`：`subagentAddress()` 判断当前是否为子代理会话；
+ * - `remote` + **`remote.session`**：`modelDirectories.directoryFor()` 内部要
+ *   解析会话的模型选择投影，缺了它们会在**运行时**抛
+ *   `cannot get property "remote.session" without inject`
+ *   （纯函数单测发现不了，只有实机浏览器能暴露）。
+ */
+export const inject = [
+  'slots',
+  'sessions',
+  'modelDirectories',
+  'remote',
+  'remote.session',
+]
