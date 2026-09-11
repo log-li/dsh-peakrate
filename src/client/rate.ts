@@ -82,8 +82,9 @@ export function detailText(
   state: RateState,
   formatCountdown: (minutes: number) => string,
   t: Translate,
+  subject?: string,
 ): string {
-  return detailLines(state, formatCountdown, t).join('\n')
+  return detailLines(state, formatCountdown, t, subject).join('\n')
 }
 
 /**
@@ -97,11 +98,15 @@ export function detailLines(
   state: RateState,
   formatCountdown: (minutes: number) => string,
   t: Translate,
+  subject?: string,
 ): string[] {
   const { profile, period, badge } = state
   const currentName = periodName(profile, period)
+  // 主语：hover 的是**当前这个模型**，第一行就该是它的名字。
+  // 没有主语时（菜单行已在 title 里带了模型名）退回 profile 覆盖范围。
+  const scope = `${profile.providerName} · ${profile.modelLabel}`
   const lines = [
-    `${profile.providerName} · ${profile.modelLabel}`,
+    subject ?? scope,
     t('detail.current', { name: currentName, badge }),
   ]
   if (period === 'campaign' && profile.campaignDetail !== undefined) {
@@ -116,6 +121,9 @@ export function detailLines(
         : t('detail.switchTo', { countdown, badge: state.nextBadge }),
     )
   }
+  // profile 覆盖范围：当主语是具体模型时，它降为**次要说明**（同一个 profile 常覆盖
+  // 多个共用时段规则的模型，如「V4.1 Flash + V4 Pro 0813」）。
+  if (subject !== undefined) lines.push(scope)
   if (profile.verifiedAt !== undefined) {
     lines.push(t('detail.verified', { date: profile.verifiedAt }))
   }

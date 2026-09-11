@@ -300,3 +300,29 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* ============ 5) 自绘悬停卡片（替代原生 title） ============
+ * 复用 .dsh-peakrate-ms-menu 的整体观感（圆角卡片 / 阴影 / 菜单底色），
+ * 只覆盖内边距与尺寸约束 —— 详情是纯文本块，不需要菜单的限高与滚动。
+ */
+.dsh-peakrate-hover {
+  min-width: min(200px, 100vw - 32px);
+  max-width: min(360px, 100vw - 32px);
+  max-height: none;
+  padding: 10px 12px;
+  gap: 2px;
+  pointer-events: none; /* 浮层不该截获鼠标，否则会在离开徽章时抖动 */
+}
+
+.dsh-peakrate-hover-title {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.dsh-peakrate-hover-line {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}

@@ -20,7 +20,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import { formatCountdown } from '../schedule.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
 import css from './style.css'
-import { rateFor, detailText } from './rate.js'
+import { rateFor, detailLines } from './rate.js'
+import { HoverCard } from './Tooltip.js'
 import {
   fetchLiveCatalog,
   resolveProfiles,
@@ -103,7 +104,14 @@ function injectStyles(): void {
 interface ChipProps {
   available: boolean
   directory: {
-    getSnapshot: () => { current: { provider: string; model: string } | null }
+    getSnapshot: () => {
+      current: { provider: string; model: string } | null
+      /** 共享模型目录的分组；用于把模型 **id** 换成用户看到的**展示名**。 */
+      groups?: readonly {
+        id: string
+        models: readonly { id: string; name: string }[]
+      }[]
+    }
     subscribe: (fn: () => void) => () => void
   }
   peakrate?: PeakrateFace
@@ -118,6 +126,9 @@ interface ChipProps {
  * @param props - 注入面 + 共享模型目录。
  */
 export function PeakrateChip(props: ChipProps): React.ReactElement | null {
+  // 自绘悬停卡片：锚点即徽章本身；原生 title 已移除（见 Tooltip.tsx 的理由）
+  const chipRef = React.useRef<HTMLSpanElement>(null)
+  const [hover, setHover] = React.useState(false)
   const state = React.useSyncExternalStore(
     (fn) => props.directory.subscribe(fn),
     () => props.directory.getSnapshot(),
@@ -145,11 +156,26 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
   // 「一般只有开始用时需要看详细信息，之后看图标简略显示就够了」。
   // 「学一次」的需求由**设置卡片**承担（那里有完整覆盖表 + 规则 + 配置说明），
   // 徽章只承担「随时扫一眼」。
+  const t = props.t ?? ((k: string) => k)
+  // 主语 = 当前模型。优先用**用户看到的展示名**（与触发器一致，如 `DeepSeek-V41-Flash`），
+  // 查不到才退回原始 id —— 直接显示 `deepseek-flash` 这种内部 id 对使用者没有意义。
+  const subject =
+    state.groups
+      ?.find((g) => g.id === current.provider)
+      ?.models.find((m) => m.id === current.model)?.name ?? current.model
+  const lines = detailLines(rate, formatCountdown, t, subject)
+
   return React.createElement(
     'span',
     {
+      ref: chipRef,
       className: `dsh-peakrate-chip dsh-peakrate-${rate.period}`,
-      title: detailText(rate, formatCountdown, props.t ?? ((k) => k)),
+      onMouseEnter: () => setHover(true),
+      onMouseLeave: () => setHover(false),
+      // 键盘可达：聚焦也展示详情（原生 title 做不到这点）
+      onFocus: () => setHover(true),
+      onBlur: () => setHover(false),
+      tabIndex: 0,
     },
     React.createElement(
       'span',
@@ -164,6 +190,21 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
           { className: 'dsh-peakrate-chip-countdown' },
           ` · ${countdown}`,
         ),
+    // 自绘悬停卡片（替代原生 title；理由见 Tooltip.tsx）
+    React.createElement(
+      HoverCard,
+      { anchor: chipRef.current, open: hover, label: lines.join('\n') },
+      lines.map((line, i) =>
+        React.createElement(
+          'span',
+          {
+            key: i,
+            className: i === 0 ? 'dsh-peakrate-hover-title' : 'dsh-peakrate-hover-line',
+          },
+          line,
+        ),
+      ),
+    ),
   )
 }
 

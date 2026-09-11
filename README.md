@@ -33,7 +33,8 @@ dsh-peakrate reads the schedule that applies to each provider, works out the sta
 
 - ⛰️ **Per-provider judgement** — each provider is evaluated in **its own IANA time zone** against **its own schedule**. No DeepSeek-only assumptions.
 - 🌗 **Three rate states** — `peak`, `offPeak`, and **`campaign`** (date-ranged promotional windows that take precedence over the regular cycle).
-- ⏱️ **Switch countdown** — not just the current rate, but when it ends: `1× · 2d 7h`.
+- ⏱️ **Switch countdown** — not just the current rate, but when it ends and what it becomes: `1× · 2d 7h`, `2d 6h → 2×`.
+- 💬 **A theme-aware hover card** — the detail is drawn in-page, not an OS tooltip, so it matches the harness styling and is reachable by keyboard focus too.
 - 📋 **Every row in the model selector** — compare providers *before* switching. Selection only ever happens from this panel, so the information lands exactly where the decision does.
 - 📌 **Composer tool-row badge** — the current model's rate and countdown, one glance away, no menu required.
 - 🔄 **Live catalog** — the host half refreshes the shared catalog every 24 hours and serves it to the page over a fenced route, so a data update reaches the badges without a rebuild. **Refresh now** is one click away in the coverage panel.
@@ -80,6 +81,12 @@ Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a 
 **In the composer tool row** — the current model's rate, always visible, no menu required:
 
 <img src="docs/chip.png" width="560" alt="Rate badge in the composer tool row" />
+
+**Hover the badge** for the full picture — which model, which state, the peak/off-peak spread,
+when it switches and to what, and which profile it matched. The card is drawn by the plugin
+itself (not an OS tooltip), so it follows the theme and reads the same in light and dark:
+
+<img src="docs/hover-card.png" width="380" alt="Hover detail card" />
 
 ### The three states
 
