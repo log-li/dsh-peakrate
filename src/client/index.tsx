@@ -145,9 +145,19 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
       : React.createElement(
           'span',
           { className: 'dsh-peakrate-chip-countdown' },
+          ` · ${countdown}`,
           rate.trend === undefined
-            ? ` · ${countdown}`
-            : ` · ${countdown} ${rate.trend === 'up' ? '↑' : '↓'}`,
+            ? null
+            : React.createElement(
+                'span',
+                {
+                  className:
+                    rate.trend === 'up'
+                      ? 'dsh-peakrate-trend-up'
+                      : 'dsh-peakrate-trend-down',
+                },
+                rate.trend === 'up' ? ' ↑' : ' ↓',
+              ),
         ),
   )
 }
@@ -365,7 +375,25 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ③ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
+    // ③ 插件卡片：出现在「设置 → 插件 → 插件配置」。
+    //    keyed 槽位按 **Host 提供的 settings 命名空间** 派发 key，因此 key 必须是
+    //    我们自己的命名空间名（`peakrate`，在 settings.yaml 里）。
+    slots.inject('settings.plugin.item', () =>
+      slots.register(
+        {
+          name: 'settings.plugin.item',
+          key: 'peakrate',
+          inject: () => ({
+            peakrate: DEFAULT_FACE,
+            modelDirectories: models,
+            t,
+          }),
+        },
+        PeakrateSettings,
+      ),
+    )
+
+    // ④ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
     slots.inject('conversation.input.model', () =>
       slots.register(
         {
