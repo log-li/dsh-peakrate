@@ -332,6 +332,32 @@ dsh-peakrate/
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
 
+### 2026-09-12 — 选择器 fork：两个只有真实浏览器能暴露的缺陷
+
+用户要求「在模型选择器里一览各模型倍率」。官方组件无扩展点（不声明 children、
+0 处 renderSlot），故完整移植（MIT）。隔离实例验证过程中捕获两个缺陷：
+
+1. **`single` 槽位遮蔽必须给 `priority`，且要低于官方**
+   - 现象：注册直接抛 `single slot "conversation.input.model" already has a
+     registration at priority 0 (registered by Z8) — register at a different
+     priority to shadow it (lowest renders)`
+   - 语义（读 `dsh-web-frontend` 的 slots 实现确认）：条目按 priority **升序**排列，
+     `entriesOfSlot` 对 single **只取第一个** → **优先级最低者渲染**。故用 `priority: -1`。
+
+2. **CSS 从未生效**（`--loader:.css=text` 只产出字符串，不会自动注入）
+   - 现象：菜单 `position: static`、`maxHeight: none`、`width: 1280`（占满整行）
+     → 菜单跑到视口外，只露出底部一行
+   - 根因：构建配了 `--loader:.css=text`，但**没有任何代码把它插入 `document.head`**
+   - 修复：与官方同构的注入函数（`style[data-plugin-css=…]` 去重）
+   - **顺带发现**：官方 CSS 用的设计 token（`--dsw-alias-interactive-bg-hover` /
+     `label-tertiary` / `border-l3` / `dsw-specific-menu` / `elevation-prominent` 等
+     共 16 个）**比 Theme Inspect 列出的更多**。改为直接采用官方 CSS
+     （类名前缀 `_7KE1Ra_` → `dsh-peakrate-ms-`），视觉与官方完全一致。
+
+- **验证**（与官方逐项对照，两种配置行为一致）：根面板两项 · 19 行分组 ·
+  9 行带倍率 · 未匹配无徽章 · 点当前模型关菜单 · 点其它模型发出
+  `POST /api/session/selectModel` → 200 · Escape 逐级返回 · 页面错误 0。
+
 ### 2026-09-12 — 实机验证通过并装入 web profile
 
 - **最终验证**（线上 3080 实例，Playwright 无头浏览器实测）：

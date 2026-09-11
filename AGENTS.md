@@ -1,7 +1,12 @@
 # AGENTS.md — dsh-peakrate
 
-DSH 生态插件：在 **composer 工具行左侧**显示**当前模型**的峰谷倍率与切换倒计时，
-hover 看精简详情。**不替换任何自带 UI**（见下方槽位坑）。
+DSH 生态插件：显示模型的峰谷倍率与切换倒计时，两处互补呈现：
+
+1. **composer 工具行**（追加式，`conversation.input.left`）——免开菜单即见当前模型倍率；
+2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷，
+   选型时可直接比价。
+
+第 2 项是**有意遮蔽**自带 UI，必须遵守「**功能超集**」纪律（见下方槽位坑）。
 
 **设计真相见 spec**：`.plans/spec/dsh-peakrate-spec.md ` —— 改行为前先读它，
 改行为后先更新它（全局「Spec 先行规则」）。
@@ -11,7 +16,7 @@ hover 看精简详情。**不替换任何自带 UI**（见下方槽位坑）。
 DSH bundle 插件 + client 半边，加入 profile 的 `dsh.profile.bundles` 即生效：
 
 - `dsh.bundle.patch: ./cordis.patch.yml`（host 侧挂载自身）
-- `dsh.client.platform: web`（client 侧**追加**到 `conversation.input.left`）
+- `dsh.client.platform: web`（client 侧：追加徽章 + 有意接管模型选择器）
 
 ## 硬约束（违反即偏离 spec）
 
@@ -35,7 +40,9 @@ dsh-peakrate/
 │   ├── schedule.ts       # 纯函数：currentPeriod / minutesUntilSwitch（可单测）
 │   ├── matching.ts       # 纯函数：provider 别名 + 模型归一化 → profile（可单测）
 │   └── client/
-│       ├── index.tsx     # 追加到 conversation.input.left，渲染当前模型徽章/倒计时
+│       ├── index.tsx     # 注册两处呈现 + locale 文案
+│       ├── ModelSelect.tsx  # fork 官方选择器（功能超集）+ 每行倍率徽章
+│       ├── rate.ts       # 倍率判定共享层（两处呈现共用）
 │       └── style.css     # 仅用 --dsw-* 设计 token
 └── test/                 # 纯函数单测 + 匹配表快照测试
 ```
@@ -67,18 +74,21 @@ dsh-peakrate/
   插件加载成功、host 正常、单测全绿，但组件读到的数据恒为空 → **UI 一个徽章都不显示**。
   回归测试见 `test/bundle-contract.test.ts`（从构建产物验证，而非直接喂纯函数）。
 
-- **★ 绝不注册到 `replaceRisk: shadows-shipped-ui` 的槽位**（2026-09-12 事故）：
-  这类槽位注册即**遮蔽官方实现**。本插件曾注册到 `conversation.input.model`
-  （single + shadows-shipped-ui）做「替换选择器」，替换实现残缺 →
-  **用户无法切换模型**。教训：**「槽位允许替换」≠「应该替换」**；
-  用残缺实现接管核心交互入口，是把测试风险转嫁给用户的日常工具。
-  - **正确做法**：注册到 `replaceRisk: none` 的 **list** 槽位做纯追加。
-    本插件用 `conversation.input.left`（composer 工具行左侧）。
-  - **查槽位安全性**：Client Slots Inspect `listSubTree` 会给出每个槽位的
-    `kind` / `replaceRisk`。`single` + `shadows-shipped-ui` = 危险；
-    `list` + `none` = 安全（可追加）。
-  - **守卫测试**：`test/bundle-contract.test.ts` 维护 `SHADOWING_SLOTS` 清单并断言
-    绝不注册其中任何一个。**改 slot 必跑它**。
+- **★ 遮蔽 `shadows-shipped-ui` 槽位的纪律**（2026-09-12 两次教训）：
+  这类槽位注册即**遮蔽（取代）官方实现**。
+  - **默认禁止**：优先用 `replaceRisk: none` 的 **list/keyed** 槽位做纯追加。
+    查法：Client Slots Inspect `listSubTree` 给出 `kind` / `replaceRisk`。
+  - **确有必要时**（如官方组件内部毫无扩展点，只能重写）：
+    1. 在 `src/client/index.tsx` 的 **`INTENTIONALLY_SHADOWED`** 清单登记并**写明理由**；
+    2. **必须功能超集**——官方有的交互（键盘/aria/portal/toast/错误态…）一个都不能少；
+    3. 官方包须 **MIT**（或兼容许可），否则只可借鉴思路不可照搬；
+    4. 隔离实例逐项对照验证（见下方「隔离实例实机验证」）；
+    5. 记录上游版本（当前 `0.1.5-rc.1`），DSH 升级时对照重移植。
+  - **血的教训**：本插件曾用**残缺的**替换实现接管
+    `conversation.input.model`（无 effort 选择、无加载/错误态）→
+    **用户无法切换模型**。**「槽位允许替换」≠「应该替换」**。
+  - **守卫测试**：`test/bundle-contract.test.ts` 读 `INTENTIONALLY_SHADOWED`：
+    清单**之外**的 shadowing 槽位一律禁止注册；清单内的必须写明理由。**改 slot 必跑它**。
 
 - **★ client 插件的 `inject` 必须含 `remote.session`**（2026-09-12 实测）：
   `modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，依赖
@@ -105,6 +115,22 @@ dsh-peakrate/
   ```
   条目按 priority **升序**排列，而 `entriesOfSlot` 对 single **只取第一个**
   → **优先级最低者渲染**。所以遮蔽官方（0）要用 **`priority: -1`**。
+
+- **★ esbuild 的 `--loader:.css=text` 只把 CSS 变成字符串，必须自己注入 DOM**
+  （2026-09-12 实测）：缺了注入这一步，**所有 CSS 类名都没有样式** ——
+  表现为菜单 `position: static` 跑到视口外、`max-height` 失效、布局全乱。
+  做法与官方同构（**带去重**）：
+  ```js
+  const tagId = 'dsh-peakrate/style.css'
+  if (document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
+    const tag = document.createElement('style')
+    tag.dataset.plugin = 'dsh-peakrate'
+    tag.dataset.pluginCss = tagId
+    tag.textContent = css          // import css from './style.css'
+    document.head.appendChild(tag)
+  }
+  ```
+  **契约测试与 DOM 断言都发现不了**——只有真实浏览器量 `getComputedStyle` 才暴露。
 
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
@@ -133,9 +159,13 @@ dsh-peakrate/
 **构建产物契约**（`test/bundle-contract.test.ts`，从 `lib/client.js` 验证）：
 
 - 产物是 `__ModuleLoader__` 包裹的 CJS、可被 classic script 解析
-- **绝不注册到 `SHADOWING_SLOTS` 中的任何槽位**（含 `conversation.input.model`）
-- 注册到 `conversation.input.left`，且**同时**传 `name`（槽位键）与 `id`（自有 cell 键）
+- 除 `INTENTIONALLY_SHADOWED` 清单外，**不得注册任何 shadowing 槽位**
+- 清单内的槽位**必须写明理由**（>20 字符，防无理由遮蔽）
+- `conversation.input.left` 用 `id`（追加）；`conversation.input.model` 用 `name` +
+  `priority: -1`（遮蔽）
+- 接管选择器时**必须同时保留**工具行徽章（两者互补，不可二选一）
 - 注入面能给出非空 profiles，端到端能算出正确判定
+- `inject` 含 `slots`/`sessions`/`modelDirectories`/`remote`/`remote.session`
 
 ### ★ 隔离实例实机验证（client 插件发布前的**标准动作**）
 
@@ -165,13 +195,21 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 ③ 徽章渲染且数值正确。**「服务端下发了产物」≠「运行时无错」** —— 本次
 `remote.session` 缺陷正是服务端一切正常、浏览器才报错。
 
+**与官方逐项对照**（fork 的槽位尤其重要——曾在此翻车）：同一脚本分别跑
+「启用插件」与「禁用插件」两种配置，行为必须一致。已验证一致的项目：
+根面板两项 · 列表行数与分组 · 点当前模型关菜单 · 点其它模型发出
+`POST /api/session/selectModel` → 200 · Escape 逐级返回 · 页面错误 0。
+
+> **注意**：隔离 profile 的 `selectModel` 虽返回 200，但 UI 投影不刷新
+> （官方同样如此）——属该环境的限制，**不能据此判断切换成功**。
+> 真实切换需在用户 profile 由人确认。
+
 **实机验收**（装进 web profile 后开新会话）——见 spec §10：
 
-1. **确认自带模型选择器仍可用**（最高优先级——上一版就是在这里翻车的）
-2. composer 工具行左侧出现当前模型的徽章；`ollama`（UTC）与 `deepseek-official`
-   （北京时）的倒计时**各自正确**——同一模型不同 provider 时段规则不同，这是本插件
-   区别于 DeepSeek 专用插件的价值所在
-3. 未匹配的模型（如 kimi-k3）**什么都不显示**
+1. **确认模型选择器可用**：能打开、能切换模型、切换后触发器更新
+2. 菜单内每行显示倍率；未匹配的模型（如 kimi-k3）**什么都不显示**
+3. composer 工具行的当前模型徽章仍在（与菜单呈现互补）
+4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
 
 ## 提交门禁
 

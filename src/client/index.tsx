@@ -19,6 +19,7 @@ import * as React from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import { formatCountdown } from '../schedule.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
+import css from './style.css'
 import { rateFor, badgeIcon, detailText } from './rate.js'
 import { ModelSelect, type DirectoryState } from './ModelSelect.js'
 
@@ -59,6 +60,29 @@ function bundledProfiles(): RateProfile[] {
 const DEFAULT_FACE: PeakrateFace = {
   profiles: () => bundledProfiles(),
   config: () => ({}),
+}
+
+/* ------------------------------------------------------------------ *
+ * 样式注入
+ * ------------------------------------------------------------------ */
+
+/**
+ * 把本插件样式插入 `document.head`（**去重**，与官方同构）。
+ *
+ * ⚠️ 这是一个容易漏掉的步骤：esbuild 的 `--loader:.css=text` 只把 CSS 变成
+ * 字符串模块，**不会自动注入**。缺了它，CSS 类名全部无样式 ——
+ * 表现为菜单 `position: static` 而跑到视口外、`max-height` 失效等
+ * （2026-09-12 实测踩坑，纯 DOM/契约测试均发现不了，只有真实浏览器可见）。
+ */
+function injectStyles(): void {
+  if (typeof document === 'undefined') return
+  const tagId = 'dsh-peakrate/style.css'
+  if (document.querySelector(`style[data-plugin-css="${tagId}"]`) !== null) return
+  const tag = document.createElement('style')
+  tag.dataset.plugin = 'dsh-peakrate'
+  tag.dataset.pluginCss = tagId
+  tag.textContent = css
+  document.head.appendChild(tag)
 }
 
 /* ------------------------------------------------------------------ *
@@ -202,6 +226,8 @@ interface ClientScope {
  * @param ctx - client cordis 上下文。
  */
 export function apply(ctx: Context): void {
+  injectStyles()
+
   ctx.inject(['slots', 'sessions', 'modelDirectories', 'locale'], (injected) => {
     const scope = injected as unknown as ClientScope
 
