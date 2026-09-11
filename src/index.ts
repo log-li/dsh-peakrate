@@ -327,6 +327,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     enabled: config.enabled ?? true,
     refreshIntervalHours: config.refreshIntervalHours ?? DEFAULT_REFRESH_HOURS,
   }
+  /** 安装时由 `setSource` 交接的「当前用户设置」读取器；每次变更后按需重读。 */
+  let readSettings: (() => Record<string, unknown>) | undefined
   /**
    * 把最新设置应用到运行中的 store。
    *
@@ -362,12 +364,19 @@ export function apply(ctx: Context, config: Config = {}): void {
       ) => void
     } }).settings
     if (settings === undefined) return
+    // 契约（2026-09-12 实测探针确认）：`setSource` **只在安装时交接一次读取器**，
+    // 此后用户每次编辑只触发 `onChange`，**不会**再调 `setSource`。
+    // 因此必须「存读取器 + 在 onChange 里自己再拉一次」——
+    // 官方两个使用方（dsh-agent-loop / dsh-tool-subagent）同样是存 reader 按需读。
+    // 早期写法在 setSource 里一次性取值、onChange 留空 → 用户编辑到不了运行中的 store。
     settings.installSection(ctx, SETTINGS_NAMESPACE, SETTINGS_SCHEMA, live, {
       setSource: (source) => {
-        const next = source() as typeof live
-        applySettings(next)
+        readSettings = source
+        applySettings(readSettings() as typeof live)
       },
-      onChange: () => {},
+      onChange: () => {
+        if (readSettings !== undefined) applySettings(readSettings() as typeof live)
+      },
     })
   })
 }

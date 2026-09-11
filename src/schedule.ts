@@ -127,21 +127,48 @@ function overrideActive(
   weekday: number,
   minutes: number,
   date: string,
+  prevWeekday: number,
+  prevDate: string,
 ): boolean {
-  // 日期区间（字符串比较对 YYYY-MM-DD 有效）
-  if (override.startDate !== undefined && date < override.startDate) return false
-  if (override.endDate !== undefined && date > override.endDate) return false
-  // 星期过滤
-  if (override.days.length > 0 && !override.days.includes(weekday)) return false
-  // 时间窗口（支持跨午夜）
-  for (const w of override.windows) {
-    const start = parseMinutes(w.start)
-    const end = parseMinutes(w.end)
-    if (Number.isNaN(start) || Number.isNaN(end)) continue
-    if (end > start) {
-      if (minutes >= start && minutes < end) return true
-    } else if (minutes >= start || minutes < end) {
-      return true
+  const inRange = (d: string): boolean => {
+    // 日期区间为**闭区间**（字符串比较对 YYYY-MM-DD 有效）
+    if (override.startDate !== undefined && d < override.startDate) return false
+    if (override.endDate !== undefined && d > override.endDate) return false
+    return true
+  }
+  const dayOk = (w: number): boolean =>
+    override.days.length === 0 || override.days.includes(w)
+
+  // ① 当天：窗口的**晚段**（含整个非跨午夜窗口）
+  if (inRange(date) && dayOk(weekday)) {
+    for (const w of override.windows) {
+      const start = parseMinutes(w.start)
+      const end = parseMinutes(w.end)
+      if (Number.isNaN(start) || Number.isNaN(end)) continue
+      if (end > start) {
+        if (minutes >= start && minutes < end) return true
+      } else if (minutes >= start) {
+        // 跨午夜窗口的当天部分：`start` 到午夜
+        return true
+      }
+    }
+  }
+
+  // ② 前一天的**跨午夜溢出段**（`[0, end)`）—— 必须归属**开始日**，
+  //    与常规窗口的 `isPeakAt` 语义保持一致。
+  //
+  //    2026-09-12 修正（独立 review 指出）：原实现把凌晨段按**落点日**过滤
+  //    days/日期区间，导致两处偏差 ——
+  //    (a) `days` 为子集时，跨午夜活动的后半段静默失效；
+  //    (b) 真实数据（23:00-09:00，09-03~09-20）实际生效成
+  //        09-03 00:00 ~ 09-21 00:00，两端各偏一天。
+  if (inRange(prevDate) && dayOk(prevWeekday)) {
+    for (const w of override.windows) {
+      const start = parseMinutes(w.start)
+      const end = parseMinutes(w.end)
+      if (Number.isNaN(start) || Number.isNaN(end)) continue
+      // 仅跨午夜窗口有溢出段
+      if (end <= start && minutes < end) return true
     }
   }
   return false
@@ -299,8 +326,11 @@ function stateAt(
   minutes: number,
   date: string,
 ): Period {
+  // 前一天的星期/日期：跨午夜窗口的凌晨段归属**开始日**
+  const prevWeekday = (weekday + 6) % 7
+  const prevDate = addDays(date, -1)
   for (const o of schedule.overrides ?? []) {
-    if (overrideActive(o, weekday, minutes, date)) return o.period
+    if (overrideActive(o, weekday, minutes, date, prevWeekday, prevDate)) return o.period
   }
   return isPeakAt(schedule, windows, weekday, minutes) ? 'peak' : 'offPeak'
 }

@@ -502,3 +502,68 @@ describe('★ nextPeriod —— 让调用方能回答「之后是变贵还是变
   })
 })
 
+
+describe('★ 跨午夜 override 归属「开始日」（独立 review #5 修正）', () => {
+  /** 真实 Z.ai 数据形态：23:00-09:00 跨午夜，日期区间 09-03 ~ 09-20。 */
+  const ZAI: Schedule = {
+    timeZone: 'Asia/Shanghai',
+    peakDays: [1, 2, 3, 4, 5],
+    peakWindows: [{ start: '14:00', end: '18:00' }],
+    overrides: [
+      {
+        period: 'campaign',
+        startDate: '2026-09-03',
+        endDate: '2026-09-20',
+        days: [0, 1, 2, 3, 4, 5, 6],
+        windows: [{ start: '23:00', end: '09:00' }],
+      },
+    ],
+  }
+  const bj = (s: string) => new Date(s.replace(' ', 'T') + '+08:00')
+
+  it('区间首日凌晨不算活动（首个活动夜才从当天 23:00 开始）', () => {
+    expect(currentPeriod(ZAI, bj('2026-09-03 00:30')).period).toBe('offPeak')
+    expect(currentPeriod(ZAI, bj('2026-09-03 23:30')).period).toBe('campaign')
+  })
+
+  it('末夜的溢出段仍算活动（归属开始日，不被午夜截断）', () => {
+    expect(currentPeriod(ZAI, bj('2026-09-20 23:30')).period).toBe('campaign')
+    expect(currentPeriod(ZAI, bj('2026-09-21 02:00')).period).toBe('campaign')
+    // 区间结束后的下一夜不再是活动
+    expect(currentPeriod(ZAI, bj('2026-09-21 23:30')).period).toBe('offPeak')
+  })
+
+  it('days 为子集时，跨午夜活动的凌晨段仍生效（按开始日的星期判定）', () => {
+    // 仅周五开始的活动窗口；周五 23:30 与周六 02:00 都应生效
+    const friOnly: Schedule = {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [],
+      peakWindows: [],
+      overrides: [
+        {
+          period: 'campaign',
+          days: [5], // 仅周五
+          windows: [{ start: '23:00', end: '09:00' }],
+        },
+      ],
+    }
+    // 2026-09-04 是周五
+    expect(currentPeriod(friOnly, bj('2026-09-04 23:30')).period).toBe('campaign')
+    // 周六凌晨属于周五那一段
+    expect(currentPeriod(friOnly, bj('2026-09-05 02:00')).period).toBe('campaign')
+    // 周六晚上则不应生效（周六不在 days 内）
+    expect(currentPeriod(friOnly, bj('2026-09-05 23:30')).period).toBe('offPeak')
+  })
+
+  it('零长度 override 窗口被丢弃（否则跨午夜分支会变成全天生效）', () => {
+    const bad: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [],
+      overrides: [{ period: 'campaign', days: [], windows: [{ start: '10:00', end: '10:00' }] }],
+    }
+    // schedule 层不做过滤（过滤在 catalog 层），此处直接验证它会全天生效——
+    // 因此 catalog 层的过滤是必要的；见 test/catalog.test.ts
+    expect(currentPeriod(bad, utc('2026-09-14T03:00:00Z')).period).toBe('campaign')
+  })
+})

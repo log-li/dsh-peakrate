@@ -110,13 +110,23 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
     const wins = Array.isArray(o.windows)
       ? o.windows
           .filter((w) => isClock(w?.start) && isClock(w?.end))
+          // 丢弃零长度窗口：`start === end` 会在 schedule 层的跨午夜分支里
+          // 恒为真（`minutes >= start || minutes < end`），变成**全天生效**。
+          // 常规窗口早已同样过滤（见上方 peakWindows），此处是补齐。
+          .filter((w) => w.start !== w.end)
           .map((w) => ({ start: w.start as string, end: w.end as string }))
       : []
     if (wins.length === 0) continue
+    // 日期必须是 `YYYY-MM-DD`：schedule 层用**字符串比较**判断区间，
+    // 非此格式（如 `2026/09/03`、`2026-9-3`）会静默错判生效区间。
+    const asDate = (v: unknown): string | undefined =>
+      typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined
+    const startDate = asDate(o.startDate)
+    const endDate = asDate(o.endDate)
     overrides.push({
       period: o.period,
-      ...(typeof o.startDate === 'string' ? { startDate: o.startDate } : {}),
-      ...(typeof o.endDate === 'string' ? { endDate: o.endDate } : {}),
+      ...(startDate === undefined ? {} : { startDate }),
+      ...(endDate === undefined ? {} : { endDate }),
       days: Array.isArray(o.days)
         ? o.days.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
         : [],

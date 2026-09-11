@@ -195,8 +195,9 @@ export function matchProfile(
     if (!mappingMatches(mapping, normalized)) continue
     const hit = profiles.find((p) => p.id === mapping.profile)
     if (hit !== undefined) return hit
-    // 映射指向了不存在的 profile id —— 常见于拼写错误。不静默吞掉，
-    // 回落到内置规则的同时留下痕迹，便于排查「为什么配置没生效」。
+    // 映射指向了不存在的 profile id（常见于拼写错误）—— 跳过并继续尝试下一条，
+    // 最终若都不中则回落到内置规则。**本函数是纯的、无 logger**，因此这里
+    // 不留日志；「为什么配置没生效」由设置卡片的覆盖表（命中 profile 一栏）暴露。
   }
 
   // 内置规则：profile 必须同时属于该 provider 的候选集，避免跨 provider 误配。

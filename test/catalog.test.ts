@@ -189,3 +189,69 @@ describe('★ 回归：校验规则必须与 schedule 层一致', () => {
     expect(out?.profiles[0]?.modelLabel).toBe('Model A')
   })
 })
+
+describe('★ override 校验（独立 review #3 #4）', () => {
+  /** 构造最小合法 catalog，只改 override。 */
+  const withOverride = (override: unknown) => ({
+    schemaVersion: 1,
+    updatedAt: '2026-09-11T00:00:00Z',
+    profiles: [
+      {
+        id: 'demo',
+        provider: 'Z.ai',
+        model: 'GLM',
+        source: 'https://example.com',
+        schedule: {
+          timeZone: 'UTC',
+          peakDays: [1],
+          peakWindows: [{ start: '12:00', end: '18:00' }],
+          overrides: [override],
+        },
+        periods: {
+          peak: { badge: '1×' },
+          offPeak: { badge: '0.5×' },
+          campaign: { badge: 'Campaign' },
+        },
+      },
+    ],
+  })
+
+  it('#3 零长度窗口（start === end）被丢弃，不产生全天生效', () => {
+    const r = parseCatalog(withOverride({
+      period: 'campaign',
+      days: [0, 1, 2, 3, 4, 5, 6],
+      windows: [{ start: '10:00', end: '10:00' }],
+    }))
+    expect(r, 'catalog 应解析成功').toBeDefined()
+    // 窗口被丢 → override 整体被跳过（wins 为空）
+    expect(r?.profiles[0]?.schedule.overrides ?? []).toHaveLength(0)
+  })
+
+  it('#4 非 YYYY-MM-DD 的日期被拒绝（避免字符串比较静默错判）', () => {
+    const r = parseCatalog(withOverride({
+      period: 'campaign',
+      startDate: '2026/09/03',
+      endDate: '2026-9-3',
+      days: [],
+      windows: [{ start: '23:00', end: '09:00' }],
+    }))
+    const o = r?.profiles[0]?.schedule.overrides?.[0]
+    expect(o, 'override 本身应保留（窗口合法）').toBeDefined()
+    // 非法日期被丢弃 → 变成「不限日期」，但**不会**留下无法比较的字符串
+    expect(o?.startDate).toBeUndefined()
+    expect(o?.endDate).toBeUndefined()
+  })
+
+  it('#4 合法日期正常保留', () => {
+    const r = parseCatalog(withOverride({
+      period: 'campaign',
+      startDate: '2026-09-03',
+      endDate: '2026-09-20',
+      days: [],
+      windows: [{ start: '23:00', end: '09:00' }],
+    }))
+    const o = r?.profiles[0]?.schedule.overrides?.[0]
+    expect(o?.startDate).toBe('2026-09-03')
+    expect(o?.endDate).toBe('2026-09-20')
+  })
+})
