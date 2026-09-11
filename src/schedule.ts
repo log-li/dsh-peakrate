@@ -75,23 +75,6 @@ function isPeakDay(schedule: Schedule, weekday: number): boolean {
   return schedule.peakDays.includes(weekday)
 }
 
-/** 当前分钟是否落在任一峰时窗口内（start 含、end 不含）。 */
-function inPeakWindow(schedule: Schedule, minutes: number): boolean {
-  for (const w of schedule.peakWindows) {
-    const start = parseMinutes(w.start)
-    const end = parseMinutes(w.end)
-    if (Number.isNaN(start) || Number.isNaN(end)) continue
-    if (end > start) {
-      // 常规窗口，如 12:00-18:00
-      if (minutes >= start && minutes < end) return true
-    } else {
-      // 跨午夜窗口，如 22:00-02:00
-      if (minutes >= start || minutes < end) return true
-    }
-  }
-  return false
-}
-
 /** 归一化窗口为当天的 [start, end) 分钟区间（end 跨午夜时按 +1440 处理）。 */
 function normalizedWindows(schedule: Schedule): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = []

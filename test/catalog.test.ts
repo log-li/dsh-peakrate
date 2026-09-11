@@ -136,3 +136,56 @@ describe('parseCatalog — 逐条丢弃坏 profile，保留好 profile', () => {
     expect(out?.profiles[0]?.schedule.peakDays).toEqual([1, 5])
   })
 })
+
+describe('★ 回归：校验规则必须与 schedule 层一致', () => {
+  it('拒绝 "24:00"（曾放行但被 schedule 层静默丢弃 → 永久谷时无倒计时）', () => {
+    const raw = minimal()
+    ;(raw.profiles[0] as Record<string, unknown>).schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [{ start: '08:00', end: '24:00' }],
+    }
+    // 唯一窗口非法 → 该 profile 被丢弃
+    expect(parseCatalog(raw)).toBeUndefined()
+  })
+
+  it('拒绝 start === end 的零长度窗口', () => {
+    const raw = minimal()
+    ;(raw.profiles[0] as Record<string, unknown>).schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [{ start: '09:00', end: '09:00' }],
+    }
+    expect(parseCatalog(raw)).toBeUndefined()
+  })
+
+  it('接受合法边界 00:00 与 23:59', () => {
+    const raw = minimal()
+    ;(raw.profiles[0] as Record<string, unknown>).schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [{ start: '00:00', end: '23:59' }],
+    }
+    expect(parseCatalog(raw)?.profiles[0]?.schedule.peakWindows).toEqual([
+      { start: '00:00', end: '23:59' },
+    ])
+  })
+
+  it('拒绝非法分钟（如 09:60）', () => {
+    const raw = minimal()
+    ;(raw.profiles[0] as Record<string, unknown>).schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [{ start: '09:60', end: '10:00' }],
+    }
+    expect(parseCatalog(raw)).toBeUndefined()
+  })
+
+  it('重复 profile id 去重，保留首个', () => {
+    const raw = minimal()
+    raw.profiles.push({ ...raw.profiles[0], model: 'Second' } as never)
+    const out = parseCatalog(raw)
+    expect(out?.profiles).toHaveLength(1)
+    expect(out?.profiles[0]?.modelLabel).toBe('Model A')
+  })
+})

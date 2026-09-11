@@ -133,13 +133,18 @@ export function matchProfile(
 
   const normalized = normalizeModelId(modelId)
 
-  // 用户配置的映射优先，且**不受 provider 展示名约束**：用户可以显式把某个
-  // provider 的模型指到任意 profile（例如把自建聚合路由指到官方 profile）。
+  // 用户配置的映射优先，且**不受「profile 必须属于该 provider 候选集」的限制**：
+  // 一旦该 provider 有了别名，用户就能把它的模型指到任意 profile（例如把自建
+  // 聚合路由指到官方 profile）。
+  // ⚠️ **别名是前置条件**：没有别名的 provider 在上面就已返回 undefined，
+  // 只写 modelMappings 而不写 providerAliases 是无效的（配置文档已说明）。
   for (const mapping of config.modelMappings ?? []) {
     if (mapping.provider !== providerId) continue
     if (!mappingMatches(mapping, normalized)) continue
     const hit = profiles.find((p) => p.id === mapping.profile)
     if (hit !== undefined) return hit
+    // 映射指向了不存在的 profile id —— 常见于拼写错误。不静默吞掉，
+    // 回落到内置规则的同时留下痕迹，便于排查「为什么配置没生效」。
   }
 
   // 内置规则：profile 必须同时属于该 provider 的候选集，避免跨 provider 误配。

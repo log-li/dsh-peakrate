@@ -1,12 +1,13 @@
 /**
- * 构建产物契约测试 —— 防止「客户端拿不到数据」这类只在实机暴露的缺陷。
+ * 构建产物契约测试 —— 从**构建产物**出发验证 client 半边的注册契约。
  *
- * 背景（2026-09-12 实测踩坑）：client 半边最初用
- * `(props as { peakrate?: PeakrateFace }).peakrate` 读数据，但注册时**没有传
- * inject 注入面**，导致 profiles 恒为 []，UI 一个徽章都不显示。而当时所有单测
- * 都只测 `rateFor()` 纯函数、直接传 profiles，因此全部通过——缺陷只在实机可见。
+ * 背景（2026-09-12 两次实机事故）：
+ * 1. client 注册 slot 时漏传 `inject` 注入面 → 组件拿不到数据 → UI 一个徽章都不显示；
+ * 2. 注册到 `conversation.input.model`（single + replaceRisk: shadows-shipped-ui）
+ *    → **遮蔽自带模型选择器**，且替换实现残缺 → **用户无法切换模型**。
  *
- * 本测试从**构建产物**出发验证契约，堵住这个盲区。
+ * 两次都是「纯函数单测全绿、实机才炸」。本文件因此从构建产物出发验证**注册契约**，
+ * 特别是**绝不允许注册到会遮蔽自带 UI 的槽位**。
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -15,6 +16,25 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const clientBundle = fileURLToPath(new URL('../lib/client.js', import.meta.url))
+
+/**
+ * 已知会**遮蔽自带 UI** 的槽位（replaceRisk: shadows-shipped-ui）。
+ * 本插件必须**永不**注册到这些槽位——注册即替换官方实现。
+ *
+ * 来源：Client Slots Inspect Provider（listSubTree）实测。
+ */
+const SHADOWING_SLOTS = [
+  'conversation.input.model', // single · 模型选择器（2026-09-12 事故槽位）
+  'conversation.composer.bar',
+  'conversation.composer',
+  'conversation.session',
+  'conversation.input.plan',
+  'conversation.input.attachments',
+  'sidebar',
+  'main',
+  'rightbar',
+  'root',
+]
 
 /** 在模拟浏览器环境下执行 client bundle，返回其导出的模块。 */
 function loadBundle(): Record<string, unknown> {
@@ -39,14 +59,66 @@ function loadBundle(): Record<string, unknown> {
   return mod
 }
 
+/** 记录 apply() 实际注册到的槽位与选项。 */
+interface Registration {
+  slot: string
+  options: Record<string, unknown>
+}
+
+/**
+ * 用假的 client ctx 跑一遍 apply()，捕获注册行为。
+ *
+ * 复刻真实契约：`ctx.inject(deps, cb)` 会以「有 get() 的 scope」回调，
+ * 且提供 slots / modelDirectories / sessions 三个服务。
+ */
+function captureRegistration(): Registration[] {
+  return captureWith({ subagentAddress: () => undefined }).regs
+}
+
+/** 可按需定制 sessions 服务的捕获。 */
+function captureWith(sessions: {
+  subagentAddress: (sessionId: string) => unknown
+}): { regs: Registration[]; opts: () => Record<string, unknown> } {
+  const mod = loadBundle() as { apply: (ctx: unknown) => void }
+  const out: Registration[] = []
+  let pendingSlot = ''
+
+  const slots = {
+    inject: (key: string, cb: () => () => void) => {
+      pendingSlot = key
+      return cb()
+    },
+    register: (opts: Record<string, unknown>) => {
+      out.push({ slot: pendingSlot, options: opts })
+      return () => {}
+    },
+  }
+  const services: Record<string, unknown> = {
+    slots,
+    modelDirectories: {
+      directoryFor: () => ({
+        store: { getSnapshot: () => ({ current: null }), subscribe: () => () => {} },
+      }),
+    },
+    sessions,
+  }
+
+  const fakeCtx = {
+    inject: (_deps: string[], cb: (scope: { get: (n: string) => unknown }) => void) => {
+      cb({ get: (n: string) => services[n] })
+    },
+  }
+  mod.apply(fakeCtx)
+  return { regs: out, opts: () => out[0]!.options }
+}
+
 beforeAll(() => {
-  // 产物可能尚未构建（CI 首次运行），先构建
   if (!existsSync(clientBundle)) {
     execFileSync('npm', ['run', 'build'], { cwd: root, stdio: 'ignore' })
   }
 }, 180_000)
 
-describe('client bundle 契约', () => {
+describe('client bundle 格式契约', () => {
   it('是 __ModuleLoader__ 包裹的 CJS（无裸 ESM import）', () => {
     const code = readFileSync(clientBundle, 'utf8')
     expect(code.startsWith('window.__ModuleLoader__.load({')).toBe(true)
@@ -66,95 +138,87 @@ describe('client bundle 契约', () => {
   })
 })
 
+describe('★ 回归：绝不注册到会遮蔽自带 UI 的槽位', () => {
+  it('注册的槽位不在 SHADOWING_SLOTS 中', () => {
+    const regs = captureRegistration()
+    expect(regs.length).toBeGreaterThan(0)
+    for (const r of regs) {
+      expect(SHADOWING_SLOTS, `禁止注册到遮蔽槽位：${r.slot}`).not.toContain(r.slot)
+    }
+  })
+
+  it('注册到 conversation.input.left（list · replaceRisk: none）', () => {
+    const regs = captureRegistration()
+    expect(regs.map((r) => r.slot)).toEqual(['conversation.input.left'])
+  })
+
+  it('用自有 id（list 槽位的纯追加），而不是 name（single 槽位的占用）', () => {
+    const regs = captureRegistration()
+    const opts = regs[0]!.options
+    expect(opts.id).toBe('peakrate')
+    // single 槽位才用 name；用 name 会「占用单元格」
+    expect(opts.name).toBeUndefined()
+  })
+
+  it('明确不注册到 conversation.input.model（2026-09-12 事故槽位）', () => {
+    const regs = captureRegistration()
+    expect(regs.some((r) => r.slot === 'conversation.input.model')).toBe(false)
+  })
+})
+
 describe('★ 回归：注册时必须提供 inject 注入面（否则 UI 无数据）', () => {
   it('register 的 options 带 inject 函数，且能给出非空 profiles', () => {
-    const mod = loadBundle() as {
-      apply: (ctx: unknown) => void
-    }
+    const regs = captureRegistration()
+    const opts = regs[0]!.options
 
-    let options: Record<string, unknown> | undefined
-    const fakeCtx = {
-      get: (k: string) =>
-        k === 'slots'
-          ? {
-              inject: (_key: string, cb: () => () => void) => cb(),
-              register: (opts: Record<string, unknown>) => {
-                options = opts
-                return () => {}
-              },
-            }
-          : undefined,
-    }
-    mod.apply(fakeCtx)
+    expect(typeof opts.inject).toBe('function')
+    const face = (opts.inject as (sessionId: string) => Record<string, unknown>)('session-1')
+    expect(face.available).toBe(true)
+    expect(face.directory).toBeDefined()
 
-    // 注册到了正确的 slot
-    expect(options?.name).toBe('conversation.input.model')
-
-    // 关键断言：必须带 inject，且注入面里能取到 profiles
-    expect(typeof options?.inject).toBe('function')
-    const face = (options!.inject as () => { peakrate: { profiles: () => unknown[] } })()
-    expect(face.peakrate).toBeDefined()
-    const profiles = face.peakrate.profiles()
-    expect(profiles.length).toBeGreaterThan(0)
+    const peakrate = face.peakrate as { profiles: () => unknown[] }
+    expect(peakrate).toBeDefined()
+    expect(peakrate.profiles().length).toBeGreaterThan(0)
   })
 
   it('注入的 profiles 覆盖本机三个关键 profile', () => {
-    const mod = loadBundle() as { apply: (ctx: unknown) => void }
-    let options: Record<string, unknown> | undefined
-    mod.apply({
-      get: (k: string) =>
-        k === 'slots'
-          ? {
-              inject: (_k: string, cb: () => () => void) => cb(),
-              register: (o: Record<string, unknown>) => {
-                options = o
-                return () => {}
-              },
-            }
-          : undefined,
-    })
-    const face = (options!.inject as () => { peakrate: { profiles: () => { id: string }[] } })()
-    const ids = face.peakrate.profiles().map((p) => p.id)
+    const regs = captureRegistration()
+    const face = (regs[0]!.options.inject as (s: string) => Record<string, unknown>)('session-1')
+    const ids = (face.peakrate as { profiles: () => { id: string }[] })
+      .profiles()
+      .map((p) => p.id)
     expect(ids).toContain('deepseek-v4')
     expect(ids).toContain('ollama-deepseek-v4')
     expect(ids).toContain('xiaomi-mimo-v2-5-token-plan')
   })
 
-  it('★ 端到端：注入的 profiles 能算出正确判定（ollama 峰 / 官方谷）', () => {
+  it('子代理会话（subagentAddress 非空）时 available 为 false', () => {
+    const { opts } = captureWith({ subagentAddress: () => 'agent-1' })
+    const face = (opts().inject as (s: string) => Record<string, unknown>)('session-1')
+    expect(face.available).toBe(false)
+  })
+})
+
+describe('★ 端到端：仍能算出正确判定（ollama 峰 / 官方谷）', () => {
+  it('同一模型经不同 provider 判定相反；未匹配返回 undefined', () => {
     const mod = loadBundle() as {
-      apply: (ctx: unknown) => void
       rateFor: (
         p: string,
         m: string,
         profs: unknown[],
         cfg: unknown,
         now: Date,
-      ) => { period: string; badge: string } | undefined
+      ) => { period: string } | undefined
     }
-    let options: Record<string, unknown> | undefined
-    mod.apply({
-      get: (k: string) =>
-        k === 'slots'
-          ? {
-              inject: (_k: string, cb: () => () => void) => cb(),
-              register: (o: Record<string, unknown>) => {
-                options = o
-                return () => {}
-              },
-            }
-          : undefined,
-    })
-    const face = (options!.inject as () => { peakrate: { profiles: () => unknown[] } })()
-    const profiles = face.peakrate.profiles()
+    const regs = captureRegistration()
+    const face = (regs[0]!.options.inject as (s: string) => Record<string, unknown>)('session-1')
+    const profiles = (face.peakrate as { profiles: () => unknown[] }).profiles()
     const now = new Date('2026-09-14T13:00:00Z') // 周一 13:00 UTC
 
-    // 同一模型，经不同 provider → 判定相反（本插件的核心价值）
-    const viaOllama = mod.rateFor('ollama', 'deepseek-v4-flash:0731', profiles, {}, now)
-    const viaOfficial = mod.rateFor('deepseek-official', 'deepseek-v4-flash', profiles, {}, now)
-    expect(viaOllama?.period).toBe('peak')
-    expect(viaOfficial?.period).toBe('offPeak')
-
-    // 未匹配必须返回 undefined（UI 什么都不显示）
+    expect(mod.rateFor('ollama', 'deepseek-v4-flash:0731', profiles, {}, now)?.period).toBe('peak')
+    expect(mod.rateFor('deepseek-official', 'deepseek-v4-flash', profiles, {}, now)?.period).toBe(
+      'offPeak',
+    )
     expect(mod.rateFor('ollama', 'glm-5.3', profiles, {}, now)).toBeUndefined()
   })
 })

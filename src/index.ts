@@ -5,7 +5,7 @@
  * 数据获取策略见 spec §2：内置快照 + 后台刷新 + 本地缓存；远端失败只记日志，
  * 绝不阻塞 UI。
  */
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
@@ -95,20 +95,63 @@ export class CatalogStore {
     this.catalogUrl = config.catalogUrl ?? DEFAULT_CATALOG_URL
   }
 
-  /** 载入可用数据：缓存优先，回退内置快照。 */
+  /**
+   * 载入可用数据：**未过期**的本地缓存优先，否则用内置快照。
+   *
+   * 「过期」判定（spec §2）：缓存数据比内置快照更旧时即视为过期。
+   * 快照随插件包分发，插件升级会带来更新的快照——若盲目信任缓存，
+   * 升级后旧缓存会一直压过新快照，直到某次远端刷新成功为止。
+   * 两端都缺 `updatedAt` 时回退到**文件 mtime vs 快照 mtime** 比较。
+   */
   load(): void {
+    const snapshot = loadSnapshot()
     const cached = loadCache(this.cachePath)
-    if (cached !== undefined) {
+
+    if (cached !== undefined && !this.isCacheStale(cached, snapshot)) {
       this.catalog = this.withCustomProfiles(cached)
       this.log(`已载入本地缓存（${this.catalog.profiles.length} 个 profile）`)
       return
     }
-    const snapshot = loadSnapshot()
+    if (cached !== undefined) {
+      this.log('本地缓存已过期（比内置快照旧），改用内置快照')
+    }
+
     if (snapshot !== undefined) {
       this.catalog = this.withCustomProfiles(snapshot)
       this.log(`已载入内置快照（${this.catalog.profiles.length} 个 profile）`)
     } else {
       this.log('内置快照不可用——插件将不显示任何倍率')
+    }
+  }
+
+  /**
+   * 判断缓存是否已过期（比内置快照旧）。
+   *
+   * @param cached - 已解析的缓存目录。
+   * @param snapshot - 已解析的内置快照（可能不可用）。
+   * @returns 缓存过期时应丢弃并改用快照。
+   */
+  private isCacheStale(cached: ParsedCatalog, snapshot: ParsedCatalog | undefined): boolean {
+    // 快照不可用时，缓存是唯一数据源，一律采用。
+    if (snapshot === undefined) return false
+
+    // 优先比数据自身的 updatedAt（语义最准）
+    const c = cached.updatedAt
+    const s = snapshot.updatedAt
+    if (c !== undefined && s !== undefined) {
+      const ct = Date.parse(c)
+      const st = Date.parse(s)
+      if (!Number.isNaN(ct) && !Number.isNaN(st)) return ct < st
+    }
+
+    // 回退到文件 mtime 比较
+    try {
+      const cacheMtime = statSync(this.cachePath).mtimeMs
+      const snapMtime = statSync(snapshotPath()).mtimeMs
+      return cacheMtime < snapMtime
+    } catch {
+      // 无法比较时保守采用缓存（它至少是上次成功拉取的结果）
+      return false
     }
   }
 

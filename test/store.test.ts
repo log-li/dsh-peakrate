@@ -6,6 +6,7 @@
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CatalogStore, type Config } from '../src/index.js'
 
@@ -225,5 +226,53 @@ describe('enabled 总开关', () => {
     const fakeCtx = { get: () => undefined, set, effect: vi.fn() } as never
     apply(fakeCtx, { enabled: false } as Config)
     expect(set).not.toHaveBeenCalled()
+  })
+})
+
+describe('★ 回归：缓存过期检查（过期缓存不得压过新快照）', () => {
+  it('缓存的 updatedAt 比快照旧 → 改用快照', () => {
+    const path = tempCachePath()
+    // 造一个「很旧」的缓存，且内容明显不同
+    writeFileSync(
+      path,
+      JSON.stringify({ ...catalog('stale-entry'), updatedAt: '2020-01-01' }),
+      'utf8',
+    )
+    const store = new CatalogStore({ cachePath: path }, silent)
+    store.load()
+    const ids = store.profiles().map((p) => p.id)
+    expect(ids).not.toContain('stale-entry')
+    // 内置快照有 14 个 profile
+    expect(ids.length).toBeGreaterThan(10)
+  })
+
+  it('缓存与快照 updatedAt 相同 → 仍用缓存（缓存是远端拉取的结果）', () => {
+    const path = tempCachePath()
+    const snapshotUpdatedAt = JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL('../data/pricing.json', import.meta.url)),
+        'utf8',
+      ),
+    ).updatedAt
+    writeFileSync(
+      path,
+      JSON.stringify({ ...catalog('same-date'), updatedAt: snapshotUpdatedAt }),
+      'utf8',
+    )
+    const store = new CatalogStore({ cachePath: path }, silent)
+    store.load()
+    expect(store.profiles().map((p) => p.id)).toEqual(['same-date'])
+  })
+
+  it('缓存比快照新 → 用缓存', () => {
+    const path = tempCachePath()
+    writeFileSync(
+      path,
+      JSON.stringify({ ...catalog('newer'), updatedAt: '2099-01-01' }),
+      'utf8',
+    )
+    const store = new CatalogStore({ cachePath: path }, silent)
+    store.load()
+    expect(store.profiles().map((p) => p.id)).toEqual(['newer'])
   })
 })

@@ -6,112 +6,41 @@
  *   brand-primary / label-primary / label-secondary /
  *   state-error-primary / state-success-primary / state-warn-primary /
  *   specific-sidebar-fill
+ *
+ * 2026-09-12 精简：不再替换模型选择器，只保留 composer 工具行内的紧凑徽章样式。
  */
 
-.dsh-peakrate-root {
-  position: relative;
+/* 紧凑倍率徽章：位于 composer 工具行左侧，紧邻模型选择器 */
+.dsh-peakrate-chip {
   display: inline-flex;
-}
-
-.dsh-peakrate-trigger {
-  background: transparent;
-  border: none;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  cursor: pointer;
-  padding: 0 4px;
-}
-
-.dsh-peakrate-menu {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  min-width: 280px;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: var(--dsw-alias-bg-overlay);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  padding: 4px;
-  z-index: 20;
-}
-
-.dsh-peakrate-item {
-  position: relative;
-  display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  text-align: left;
-  padding: 6px 8px;
-  cursor: pointer;
-}
-
-.dsh-peakrate-item:hover {
-  background: var(--dsw-alias-bg-layer-2);
-}
-
-.dsh-peakrate-item-current {
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.dsh-peakrate-item-label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 倍率徽章：峰时用警示色、谷时用次级文字色 */
-.dsh-peakrate-badge {
-  font-size: 0.85em;
+  gap: 2px;
+  font-size: 0.8em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  padding: 1px 5px;
-  border-radius: 3px;
   white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: default;
+  user-select: none;
 }
 
+/* 峰时：警示色 + 次级底 */
 .dsh-peakrate-peak {
   color: var(--dsw-alias-state-warn-primary);
   background: var(--dsw-alias-bg-layer-2);
 }
 
+/* 谷时：次级文字色 + 更弱的底 */
 .dsh-peakrate-offPeak {
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-layer-1);
 }
 
-.dsh-peakrate-countdown {
-  font-size: 0.8em;
-  color: var(--dsw-alias-label-secondary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.dsh-peakrate-chip-badge {
+  font-weight: 500;
 }
 
-/* hover 详情：默认隐藏，hover 该行时浮现 */
-.dsh-peakrate-detail {
-  display: none;
-  position: absolute;
-  left: 0;
-  bottom: 100%;
-  min-width: 240px;
-  margin-bottom: 4px;
-  padding: 6px 8px;
-  background: var(--dsw-alias-bg-overlay);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
+.dsh-peakrate-chip-countdown {
   color: var(--dsw-alias-label-secondary);
-  font-size: 0.8em;
-  line-height: 1.5;
-  white-space: nowrap;
-  z-index: 30;
-}
-
-.dsh-peakrate-item:hover .dsh-peakrate-detail {
-  display: block;
 }
