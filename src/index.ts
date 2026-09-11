@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { parseCatalog, type ParsedCatalog } from './catalog.js'
+import { handleCatalogRequest, type CatalogPayload } from './catalog-route.js'
 import type { MatchConfig, RateProfile } from './matching.js'
 
 /** 插件配置（spec §6）。 */
@@ -103,6 +104,8 @@ function writeCache(path: string, raw: unknown, log: (msg: string) => void): voi
  */
 export class CatalogStore {
   private catalog: ParsedCatalog | undefined
+  /** 当前 catalog 来自远端拉取还是内置/缓存快照 —— 供下发路由如实告知 client。 */
+  private catalogOrigin: 'remote' | 'builtin' = 'builtin'
   private lastFetchAt = 0
   private timer: ReturnType<typeof setInterval> | undefined
   private readonly log: (msg: string) => void
@@ -132,6 +135,7 @@ export class CatalogStore {
 
     if (cached !== undefined && !this.isCacheStale(cached, snapshot)) {
       this.catalog = this.withCustomProfiles(cached)
+      this.catalogOrigin = 'builtin' // 磁盘缓存：不是本次运行拉到的，不冒充 remote
       this.log(`已载入本地缓存（${this.catalog.profiles.length} 个 profile）`)
       return
     }
@@ -141,6 +145,7 @@ export class CatalogStore {
 
     if (snapshot !== undefined) {
       this.catalog = this.withCustomProfiles(snapshot)
+      this.catalogOrigin = 'builtin'
       this.log(`已载入内置快照（${this.catalog.profiles.length} 个 profile）`)
     } else {
       this.log('内置快照不可用——插件将不显示任何倍率')
@@ -204,6 +209,12 @@ export class CatalogStore {
   }
 
   /** 数据源更新时间（用于 UI 提示数据新鲜度）。 */
+  /** 目录数据来源（远端拉取 / 内置或缓存快照）。 */
+  origin(): 'remote' | 'builtin' {
+    return this.catalogOrigin
+  }
+
+
   updatedAt(): string | undefined {
     return this.catalog?.updatedAt
   }
@@ -238,6 +249,7 @@ export class CatalogStore {
 
       this.catalog = this.withCustomProfiles(parsed)
       this.lastFetchAt = Date.now()
+      this.catalogOrigin = 'remote' // 本次运行真的从远端拿到了数据
       writeCache(this.cachePath, raw, this.log)
       this.log(`远端刷新成功（${this.catalog.profiles.length} 个 profile）`)
       return true
@@ -349,6 +361,63 @@ export function apply(ctx: Context, config: Config = {}): void {
     store.setRefreshInterval(next.refreshIntervalHours)
     logger?.info?.(`[peakrate] 后台刷新间隔已更新为 ${next.refreshIntervalHours} 小时`)
   }
+
+  // ── 把 host 运行时拉取到的目录下发给浏览器 ──────────────────────────────
+  // 在此之前 client 只吃构建期烤进 bundle 的快照，host 的 24h 拉取没有任何消费者
+  // （数据源更新后界面不变）。这条路由就是那个缺失的消费者。
+  const payload = (): CatalogPayload => ({
+    profiles: store.profiles(),
+    ...(store.updatedAt() === undefined ? {} : { updatedAt: store.updatedAt() }),
+    ...(store.lastFetch() === 0 ? {} : { fetchedAt: new Date(store.lastFetch()).toISOString() }),
+    origin: store.origin(),
+  })
+
+  ctx.inject(['webServer'], (webCtx: Context) => {
+    const webServer = (webCtx as unknown as { webServer?: {
+      register: (route: {
+        kind: 'prefix'
+        path: string
+        handler: (req: never, res: never) => void | Promise<void>
+      }) => () => void
+    } }).webServer
+    if (webServer === undefined) {
+      logger?.warn?.('[peakrate] webServer 服务不可用，跳过目录下发路由')
+      return
+    }
+
+    /**
+     * 部署声明的非回环可信 authority（tailnet / LAN）；取不到则只信回环。
+     *
+     * ⚠ 用 `ctx.get` 而**不是** `ctx.webRuntime`：属性访问未 inject 的服务会抛
+     * `cannot get property "webRuntime" without inject`，而本函数在**请求处理路径**上，
+     * 抛出会被 webserver 兜底成 **HTTP 400**（实测踩过：路由匹配上了却全 400）。
+     * 同理整段包 try/catch —— 信任围栏宁可退化成「只信回环」，也不能让路由 500/400。
+     */
+    const trustedHosts = (): readonly string[] => {
+      try {
+        const runtime = ctx.get('webRuntime') as { trustedHosts?: string[] } | undefined
+        return Array.isArray(runtime?.trustedHosts) ? runtime.trustedHosts : []
+      } catch {
+        return []
+      }
+    }
+
+    const dispose = webServer.register({
+      kind: 'prefix',
+      path: '/peakrate/catalog',
+      handler: (req, res) =>
+        handleCatalogRequest(req, res, {
+          payload,
+          trustedHosts,
+          refresh: async () => {
+            await store.refresh()
+            return payload()
+          },
+        }),
+    })
+    ctx.effect(() => dispose, 'peakrate: catalog route')
+    logger?.info?.('[peakrate] 已挂载 /peakrate/catalog（带信任围栏）')
+  })
 
   ctx.inject(['settings'], (settingsCtx: Context) => {
     const settings = (settingsCtx as unknown as { settings?: {

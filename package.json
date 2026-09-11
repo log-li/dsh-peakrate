@@ -1,16 +1,19 @@
 {
   "name": "dsh-peakrate",
   "version": "0.1.0",
-  "description": "DSH plugin: per-provider peak/off-peak rate badges and switch countdown inside the model selector. Unlike DeepSeek-only peak indicators, it judges each provider by its own time zone and schedule.",
+  "description": "Peak / off-peak rate badges and switch countdown for DeepSeek Harness — per provider, per model, in the model selector and the composer tool row. Judges each provider by its own time zone and schedule instead of DeepSeek-only hours.",
   "type": "module",
   "keywords": [
-    "dsh",
     "deepseek-harness",
-    "plugin",
+    "dsh",
+    "dsh-plugin",
     "peak",
     "off-peak",
     "pricing",
-    "model-selector"
+    "rate-limit",
+    "model-selector",
+    "campaign",
+    "timezone"
   ],
   "license": "MIT",
   "main": "lib/index.js",
@@ -49,6 +52,8 @@
     "data",
     "cordis.patch.yml",
     "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -59,7 +64,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "audit": "node scripts/audit-coverage.mjs"
+    "audit": "node scripts/audit-coverage.mjs",
+    "prepublishOnly": "npm run build",
+    "verify": "npm run typecheck && npm test"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
@@ -75,5 +82,21 @@
     "react": "^19.3.0",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
+  },
+  "author": {
+    "name": "Logan Lin",
+    "url": "https://github.com/log-li"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/log-li/dsh-peakrate.git"
+  },
+  "homepage": "https://github.com/log-li/dsh-peakrate#readme",
+  "bugs": {
+    "url": "https://github.com/log-li/dsh-peakrate/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

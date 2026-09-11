@@ -21,6 +21,13 @@ import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RateIcon } from './icons.js'
 import { currentPeriod, formatCountdown, type Period } from '../schedule.js'
 import { periodBadge } from './rate.js'
+import {
+  fetchLiveCatalog,
+  liveCatalogError,
+  liveCatalogMeta,
+  liveCatalogStatus,
+  subscribeLiveCatalog,
+} from './live.js'
 
 /** 注入面。 */
 export interface SettingsInjected {
@@ -106,6 +113,9 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
     () => directory?.store.getSnapshot(),
   )
 
+  // 订阅运行时目录 + 拉取状态，让面板上的数据来源与刷新按钮实时更新
+  React.useSyncExternalStore(subscribeLiveCatalog, liveCatalogStatus, liveCatalogStatus)
+  const [refreshing, setRefreshing] = React.useState(false)
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000)
@@ -118,6 +128,9 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
       : buildCoverage(state.groups ?? [], profiles, DEFAULT_PROVIDER_ALIASES, config)
 
   const suspicious = report === undefined ? [] : suspiciousProviders(report)
+  const meta = liveCatalogMeta()
+  const status = liveCatalogStatus()
+  const error = liveCatalogError()
 
   // 折叠时的描述行（官方卡的 description 位置）：一句话说清这卡是干什么的，
   // 再附上覆盖概况。不在这里堆告警记号 —— 展开后由告警条承担。
@@ -161,6 +174,32 @@ export function PeakrateSettings(props: PeakrateSettingsProps): React.ReactEleme
             ))}
           </ul>
         </div>
+      )}
+
+      <div className="dsh-peakrate-settings-bar">
+        <span className="dsh-peakrate-settings-muted">
+          {t('settings.source', {
+            origin:
+              meta?.origin === 'remote' ? t('settings.originRemote') : t('settings.originBuiltin'),
+            when: meta?.fetchedAt?.slice(0, 16).replace('T', ' ') ?? t('settings.never'),
+          })}
+        </span>
+        <button
+          type="button"
+          className="dsh-peakrate-settings-refresh"
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true)
+            void fetchLiveCatalog({ refresh: true }).finally(() => setRefreshing(false))
+          }}
+        >
+          {refreshing ? t('settings.refreshing') : t('settings.refreshNow')}
+        </button>
+      </div>
+      {status === 'failed' && (
+        <p className="dsh-peakrate-settings-muted">
+          {t('settings.sourceFailed', { message: error ?? '' })}
+        </p>
       )}
 
       <h4 className="dsh-peakrate-settings-h">{t('settings.coverage')}</h4>

@@ -1,0 +1,77 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: # manual: publish the current package.json version
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm provenance (OIDC trusted publishing)
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # Unlike plugins that peer-depend on host-private packages, this one only
+      # peers on publicly published @deepseek-ai packages (cordis, schemastery)
+      # and builds entirely from files in this repo — so CI runs the real gate:
+      # install, typecheck, test, build. No compiled artifact is committed.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify release artifacts
+        run: |
+          test -f lib/index.js || { echo "lib/index.js missing — build produced nothing"; exit 1; }
+          test -f lib/client.js || { echo "lib/client.js missing — build produced nothing"; exit 1; }
+          test -f CHANGELOG.md || { echo "CHANGELOG.md missing"; exit 1; }
+          echo "publishing dsh-peakrate $(node -p 'require("./package.json").version')"
+
+      - name: Publish to npm (trusted publishing / OIDC; provenance signs the tarball)
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # OIDC: trusts the npm Trusted Publisher configured for log-li/dsh-peakrate.
+        # NODE_AUTH_TOKEN is kept as a fallback for token-based publishing.
+
+      - name: Create GitHub Release with changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="$GITHUB_REF_NAME"
+          : "${VER:?expected a tag ref (pushed tag v*) or set a version}"
+          python3 - "$VER" <<'PY' > /tmp/release-notes.md
+          import re, sys
+          ver = sys.argv[1].lstrip('v')
+          s = open('CHANGELOG.md').read()
+          en, _, zh = s.partition('\n# 更新日志')  # English block, then the 中文 section
+          pat = rf'## \[{re.escape(ver)}\].*?(?=\n## \[|\Z)'
+          grab = lambda b: re.search(pat, b, re.S).group(0).strip() if re.search(pat, b, re.S) else ''
+          out = grab(en)
+          zhh = grab(zh) if zh else ''
+          notes = out + (('\n\n---\n\n' + zhh) if zhh else '')
+          print(notes or f'Release {sys.argv[1]} (see CHANGELOG.md)')
+          PY
+          if gh release view "$VER" >/dev/null 2>&1; then
+            gh release edit "$VER" --title "Release $VER" --notes-file /tmp/release-notes.md
+            echo "release existed — notes updated"
+          else
+            gh release create "$VER" --title "Release $VER" --notes-file /tmp/release-notes.md
+          fi

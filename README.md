@@ -1,229 +1,247 @@
-# dsh-peakrate
+<div align="center">
 
-在 DeepSeek Harness 的**模型选择器**里，按 **provider + 模型**分别判定峰谷时段，
-显示当前倍率徽章、切换倒计时与 hover 详情。
+# dsh-peakrate ⛰️
 
-## 为什么需要它
+**Peak / off-peak rate badges for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** — see what each model actually costs *right now*, per provider, per model, before you switch to it.
 
-DSH 生态里的「峰谷/时段」类插件**几乎全部硬编码 DeepSeek 官方时段规则**，换 provider
-就失去意义。但同一批模型常常经不同 provider 路由，而**各家时段与倍率规则并不相同**：
+> 🌐 **简体中文**: [README.zh.md](./README.zh.md) · **English**: [README.md](./README.md)
 
-| provider | 时区 | 峰时窗口 | 倍率 |
-|---|---|---|---|
-| DeepSeek 官方 | UTC（= 北京时 09:00-12:00 / 14:00-18:00） | 周一–五 01:00-04:00、06:00-10:00 | 2× / 1× |
-| Ollama Cloud | **UTC** | 周一–五 12:00-18:00 | 2× / 1× |
-| Xiaomi MiMo Token Plan | Asia/Shanghai | 每天 08:00-00:00 | 1× / 0.8× credits |
+[![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
+[![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
+[![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
+[![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
+[![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
+[![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-**同一个 `deepseek-v4-flash`，经 DeepSeek 官方与经 Ollama 路由，此刻的峰谷状态可能完全相反。**
-本插件按每个 profile 自带的时区独立计算，这正是它区别于 DeepSeek 专用插件的价值。
+<img src="docs/hero-model-selector.png" width="620" alt="Rate badges on every row of the model selector" />
 
-## 功能
+</div>
 
-两处**互补**呈现：
+---
 
-| 位置 | 内容 |
-|---|---|
-| **composer 工具行**（免开菜单） | 当前模型的倍率 + 倒计时，如 `🌙1× · 2d 10h` |
-| **模型选择器菜单内**（每行） | 各模型此刻的峰谷倍率，选型时可直接比价 |
-| hover 徽章（桌面） | 详情：provider · 模型、当前时段名、活动说明、峰谷对照、切换目标、核验日期 |
-| **未匹配的模型** | **什么都不显示**（无占位、无灰字） |
+Every provider bills on its own clock. DeepSeek charges more during peak hours by Beijing time; Ollama's window is UTC; Z.ai runs limited-time campaigns with their own date ranges. Route the *same* model through two of them and the rate you are paying can be different at this very moment.
 
-效果（菜单内逐行倍率）：
+dsh-peakrate reads the schedule that applies to each provider, works out the state at *this* moment, and puts the answer where you are already looking — on every row of the model selector, and next to the composer.
 
-```
-DeepSeek                          ← 分组标题
-  DeepSeek-V41-Flash    🌙1× · 2d 10h  ✓
-  DeepSeek-V4-Flash     🌙1× · 2d 10h
-  DeepSeek-V4-Pro       🌙1× · 2d 10h
-xiaomi-token-plan-cn
-  MiMo-V2.5             ⚡1× credits · 1h 39m
-Ollama
-  MiniMax M3                            ← 未收录 → 无徽章
-```
+**Three states, not two.** Peak and off-peak are the familiar pair. The third — **campaign** — is a limited-time promotional window with its own date range and weekday filter, and it outranks the regular cycle while it lasts.
 
-倒计时格式：`<1h` 用 `Xm`；`<24h` 用 `Xh Ym`；`≥24h` 用 `Xd Yh`。
+**One rule that matters:** every window is evaluated against real timestamps, so DST transitions and windows that cross midnight come out **correct** rather than approximately correct.
 
-**三种时段态**：峰 `2×` / 谷 `1×` / **活动**（限时促销，如 Z.ai GLM-5.3-Flash 的
-「ZCode 不计额度 · 其他 agent 半价」，带日期区间）。活动窗口优先于常规峰谷。
+## ✨ Key features
 
-配色语义：**颜色表达贵/便宜（峰橙、谷绿、活动绿），图标表达是哪个时段态**
-（**双峰山** = 峰、**双谷** = 谷、**星芒** = 活动）。
-图标刻意用「地貌形状」而非涨跌箭头 —— 箭头会被误读成「之后会涨/跌」，
-而这里要表达的是「**此刻处于高位还是低位**」（方向 ≠ 形状）。
+- ⛰️ **Per-provider judgement** — each provider is evaluated in **its own IANA time zone** against **its own schedule**. No DeepSeek-only assumptions.
+- 🌗 **Three rate states** — `peak`, `offPeak`, and **`campaign`** (date-ranged promotional windows that take precedence over the regular cycle).
+- ⏱️ **Switch countdown** — not just the current rate, but when it ends: `1× · 2d 7h`.
+- 📋 **Every row in the model selector** — compare providers *before* switching. Selection only ever happens from this panel, so the information lands exactly where the decision does.
+- 📌 **Composer tool-row badge** — the current model's rate and countdown, one glance away, no menu required.
+- 🔄 **Live catalog** — the host half refreshes the shared catalog every 24 hours and serves it to the page over a fenced route, so a data update reaches the badges without a rebuild. **Refresh now** is one click away in the coverage panel.
+- 🔍 **Coverage panel** — under *Settings → Plugins*, every configured provider × model with what it matched, plus a warning for any provider where **nothing at all** matched. That shape is a silent misconfiguration, and it is the one thing this plugin is designed never to hide.
+- 🧭 **`npm run audit`** — an offline coverage sweep over the live provider × model set, flagging providers that need a decision.
+- 🪶 **Zero runtime dependencies** — time arithmetic is `Intl.DateTimeFormat` and `Date`. No date library.
+- 🎨 **Design-token styling** — colours come from the harness's own `--dsw-*` tokens, so it follows light/dark with everything else.
 
-## 配置卡片（设置 → 插件）
+## 📚 Table of contents
 
-**设置 → 插件 → 插件配置** 里有一张**可展开**的「模型峰谷倍率」卡片
-（与官方那几张配置卡片并列，默认收起）：
+- [Install](#install)
+- [What you see](#what-you-see)
+- [How it works](#how-it-works)
+- [Coverage panel](#coverage-panel)
+- [Configuration](#configuration)
+- [Data source & freshness](#data-source--freshness)
+- [Architecture](#architecture)
+- [Compatibility & contributions](#compatibility--contributions)
+- [License](#license)
 
-- **当前覆盖情况**（实时）：逐 provider 列出模型、当前倍率、命中哪个 profile；
-  未收录的明确标「未收录」；
-- **⚠ 告警**：某个 provider **整组都没有命中**时会高亮 —— 这通常意味着漏配
-  （同一 provider 下混有非峰谷计价的模型属正常，不会告警）；
-- **匹配规则**：内置 provider 映射表 + 有意不映射的 provider 及理由；
-- **如何自定义**：`providerAliases` / `modelMappings` 的配置示例。
-
-此外 `enabled`（总开关）与 `refreshIntervalHours`（后台刷新间隔）**可直接在界面里编辑**，
-写入 `~/.dsh/settings.yaml` 的 `peakrate` 段；其余配置仍在 `cordis.patch.yml`。
-
-已在覆盖内的 provider：`deepseek-official`、`ollama`、`xiaomi-token-plan-cn`、
-`ocg` / `ocg-1` / `opencode-go`（OpenCode Go 与 DeepSeek 官方窗口一致）、
-`bai`、`zai`、`qoder`、`tencent-cloud`、`alibaba-cloud`、`swarms`。
-
-已知**有意不映射**：`openrouter`（聚合网关，provider 级规则不成立）、
-`ocg-1-chat`（仅 omen-alpha 等非峰谷计价模型）。
-
-### 关于「替换模型选择器」
-
-菜单内逐行倍率**必须**接管官方选择器（`conversation.input.model`，single +
-`replaceRisk: shadows-shipped-ui`）——经核查官方组件不声明 children、内部
-0 处 `renderSlot`，**没有任何扩展点**。
-
-因此本项目**完整移植**了官方实现（`@deepseek-ai/dsh-client-ui-model-selection`，
-**MIT**，上游 `0.1.5-rc.1`），要求**功能超集**：键盘导航、aria、portal 定位、
-toast、加载/错误/重试、effort 两级菜单等**全部保留**，仅增加每行倍率徽章。
-样式亦取自官方 CSS，仅改类名前缀，保证视觉一致。
-
-> **历史教训**：早期版本曾用**残缺的**替换实现接管该槽位（无 effort、无加载态），
-> **直接导致无法切换模型**。因此「接管」在本项目是**有纪律的行为**：
-> 必须在 `INTENTIONALLY_SHADOWED` 清单登记理由、功能超集、并经隔离实例
-> 与官方**逐项对照验证**。守卫测试见 `test/bundle-contract.test.ts`。
-
-## 已知限制
-
-- **`providerAliases` / `modelMappings` / `customProfiles` 目前只影响 host 侧**
-  （`CatalogStore` 的数据加载），**不影响 UI 渲染**——client 用的是构建期打包的
-  快照 + 内置映射。原因是 host 树与 client 树是两套独立 cordis 实例，client 拿不到
-  host 服务；要把配置送到 client 需要另加 RPC 通道（尚未实现）。
-- **不显示单价 / 花费 / 余额**（刻意不做）。
-- **不显示「选择器内每一行」的倍率徽章**（见上）。
-
-## 安装
+## Install
 
 ```bash
-dsh plugin --profile web add dsh-peakrate
+dsh plugin add dsh-peakrate
 ```
 
-插件自带 `cordis.patch.yml`，安装即挂载（bundle 通道）。
+From a local checkout:
 
-> ⚠️ **不要**再往 profile 的 `cordis.patch.yml` 手动加 `- insert: [id: peakrate, ...]`：
-> 一条插件只能有一条注册路径，双重注册会导致启动崩溃
-> （`duplicate loader entry id: peakrate`）。
+```bash
+dsh plugin add ./path/to/dsh-peakrate
+```
 
-## 配置
+**Restart `dsh web` after installing.** The plugin declares a settings namespace on the host half, and host code is only read at boot. After the restart the coverage card appears under **Settings → Plugins → Plugin configuration**.
+
+## What you see
+
+**In the model selector** — every row carries the rate that applies to that model at this moment, grouped exactly as the harness groups them:
+
+<img src="docs/hero-model-selector.png" width="560" alt="Model selector with per-row rate badges" />
+
+**In the composer tool row** — the current model's rate, always visible:
+
+<img src="docs/chip.png" width="560" alt="Rate badge in the composer tool row" />
+
+### The three states
+
+| State | Meaning | Colour | Icon |
+|---|---|---|---|
+| `peak` | Standard rate | warning (amber) | twin peaks |
+| `offPeak` | Discounted rate | success (green) | twin valleys |
+| `campaign` | Limited-time promotion | success (green) | sparkle |
+
+Colour carries **expensive vs. cheap**; the icon carries **which state it is**. The icons are deliberately *landscape shapes* rather than trending arrows — an arrow reads as "this is about to go up or down", while a peak is simply a high point. Direction and shape are not the same claim.
+
+A row shows nothing at all when no profile matches that model. That is intentional: a model without time-based pricing should not be decorated with a rate it does not have.
+
+## How it works
+
+```
+provider id ──┐
+              ├─► alias ──┐
+model id ─────┘           ├─► profile ─► schedule ─► state at now ─► badge + countdown
+                          │
+catalog (live or bundled) ┘
+```
+
+1. **Match.** The provider id goes through an alias table (`ollama` → *Ollama*). Provider ids are local labels you chose; the alias table is how a label becomes a billing reality. The model id is then normalised (a `:tag` suffix is stripped, case and separators unified) and matched against per-provider model patterns.
+2. **Evaluate.** The matched profile's `schedule` is evaluated in its own time zone. Peak windows, weekday filters, and any active override are considered together, and **overrides win** while their date range and weekday filter allow.
+3. **Render.** The state and its countdown are rendered in the model selector, the composer tool row, and the coverage panel.
+
+### Time correctness
+
+The arithmetic deliberately avoids "wall-clock minutes plus 1440" shortcuts, which produce countdowns that are off by an hour across a DST boundary — and off by a day at a window edge. Instead, wall-clock candidates are converted back to **real timestamps** and compared against `now`.
+
+Cross-midnight windows (`23:00–09:00`) belong to **the day they start**, so the early-morning half is judged against the start day's date and weekday. This holds for promotional overrides exactly as it does for ordinary peak windows.
+
+### Extending coverage
+
+Judgement is made against a curated catalog, so a provider is either **mapped** or **documented as deliberately unmapped**. There is no third, silent outcome — the coverage panel and the test suite both enforce that:
+
+- a provider whose endpoint resells another vendor's pricing (a gateway) **inherits the upstream schedule** — the catalog lists direct vendors, not resellers;
+- a provider with genuinely no time-based pricing gets an explicit entry with a written reason;
+- anything else shows up as a warning in the coverage panel.
+
+## Coverage panel
+
+<img src="docs/coverage-card.png" width="560" alt="Coverage panel under Settings → Plugins" />
+
+Under **Settings → Plugins → Plugin configuration**:
+
+| Column | Meaning |
+|---|---|
+| Provider | The configured provider, as the harness knows it |
+| Covered | How many of its models matched a profile |
+| Not covered | The models that matched nothing |
+
+A provider where **nothing at all** matched is raised to the top as a warning. Partial coverage is deliberately *not* flagged: a provider commonly mixes models with and without time-based pricing (an Ollama group holding both DeepSeek and GLM, for instance), and flagging every such row would be noise.
+
+The panel also shows where the current catalog came from — *remote* or *bundled snapshot* — with a **Refresh now** button, and `enabled` / `refreshIntervalHours` are editable here and take effect immediately.
+
+## Configuration
+
+Configuration lives in the profile's `cordis.patch.yml`:
 
 ```yaml
 - id: peakrate
-  name: dsh-peakrate
   config:
-    enabled: true                 # 总开关
-    refreshIntervalHours: 24      # 后台刷新间隔（0 = 不自动刷新）
-    cachePath: ~/.dsh/dsh-peakrate/pricing.json
-    catalogUrl: https://offpeakclock.com/pricing.json   # 可换镜像/自建
-    providerAliases:              # 覆盖/补充 provider 别名
-      ocg: Ollama                 # 例：把自建聚合路由指到某个 profile provider
-    modelMappings:                # 覆盖/补充模型归属（优先于内置规则）
-      - provider: ollama
-        match: "^deepseek-v4"     # 前缀（默认）或正则（matchIsRegex: true）
-        profile: ollama-deepseek-v4
-    customProfiles: []            # 自定义 profile（新增，或按 id 覆盖内置快照条目）
+    # provider id → catalog provider name
+    providerAliases:
+      my-gateway: DeepSeek
+    # provider-scoped model patterns; first match wins
+    modelMappings:
+      - provider: my-gateway
+        match: "^deepseek-v4"
+        profile: deepseek-v4
+      - provider: my-gateway
+        match: "glm-5\\.3-flash"
+        matchIsRegex: true
+        profile: zai-glm-5-3-flash
+    # fetch interval; 0 disables the background refresh
+    refreshIntervalHours: 24
+    catalogUrl: https://offpeakclock.com/pricing.json
+    cachePath: ~/.dsh/peakrate/pricing.json
 ```
 
-| 配置项 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `enabled` | boolean | `true` | 总开关；`false` 时不注册任何内容 |
-| `refreshIntervalHours` | number | `24` | 后台刷新间隔（小时）；`0` = 不自动刷新 |
-| `cachePath` | string | `$DSH_HOME/dsh-peakrate/pricing.json` | 本地缓存路径 |
-| `catalogUrl` | string | `https://offpeakclock.com/pricing.json` | 数据源地址 |
-| `providerAliases` | object | `{}` | DSH provider id → 数据源 provider 展示名 |
-| `modelMappings` | array | `[]` | 模型归属覆盖，**优先于内置规则且不受 provider 名约束** |
-| `customProfiles` | array | `[]` | 自定义 profile，按 `id` 覆盖内置条目或追加新条目 |
-
-`customProfiles` 条目结构与数据源 profile 一致（至少需要 `id` / `provider` /
-`schedule` / `periods`）。
-
-## 匹配规则
-
-**只有 provider 与模型同时匹配到同一 profile 才显示**；任一不符 → 不显示任何内容。
-
-内置别名（可用 `providerAliases` 覆盖）：
-
-| DSH provider id | 数据源 provider 名 | 命中 profile |
+| Option | Default | Description |
 |---|---|---|
-| `deepseek-official` | DeepSeek | `deepseek-v4` |
-| `ollama` | Ollama | `ollama-deepseek-v4` |
-| `xiaomi-token-plan-cn` | Xiaomi MiMo | `xiaomi-mimo-v2-5-token-plan` |
-| `bai` / `zai` / `qoder` / `tencent-cloud` / `alibaba-cloud` / `swarms` | 同名 | 各自的 profile |
+| `enabled` | `true` | Background refresh switch. Also editable in the coverage panel. |
+| `refreshIntervalHours` | `24` | Hours between catalog refreshes. `0` disables it. Also editable in the panel. |
+| `catalogUrl` | the public catalog | Remote catalog URL. |
+| `cachePath` | `~/.dsh/peakrate/pricing.json` | On-disk cache of the last successful fetch. |
+| `providerAliases` | built-in table | Extra `provider id → catalog provider` mappings. Yours win over the built-ins. |
+| `modelMappings` | built-in table | Extra `provider + model pattern → profile` mappings. Yours are tried first. |
+| `customProfiles` | `[]` | Additional profiles (host-side only; see below). |
 
-模型归一化：去掉 provider 侧 tag 后缀（`deepseek-v4-flash:0731` → `deepseek-v4-flash`）、
-小写化。**V4 系为宽松归属**：`deepseek-v4*` 前缀全系（含 `deepseek-v4.1-flash`、
-`deepseek-v4-flash-vision-exp`）以及历史别名 `deepseek-flash` 都归 V4 系。
+`modelMappings` entries are prefix matches by default; set `matchIsRegex: true` for a regular expression. Invalid regexes do not throw — they simply never match.
 
-数据源里没有对应 provider 的（如 `openrouter`、`ocg`、`opencode-go`、`ocg-1`），
-其模型一律不显示。
+> **`customProfiles` is host-side only.** The client half cannot receive the user config over the client/host boundary, so a custom profile affects the host, the coverage panel and the served catalog but not the badges. Extra *providers* are fully supported through `providerAliases` + `modelMappings`; extra *profiles* are the limitation.
 
-## 数据源
+## Data source & freshness
 
-唯一数据源：[offpeakclock.com/pricing.json](https://offpeakclock.com/pricing.json)
-（schemaVersion 1）。每个 profile 携带 `schedule`（时区 / 峰时天 / 峰时窗口）、
-`periods`（峰谷倍率文案）、`source`（官方定价页）与 `verifiedAt`（人工核验日期）。
+The catalog is [offpeakclock.com/pricing.json](https://offpeakclock.com/pricing.json) (`schemaVersion: 1`), a community-maintained snapshot of provider peak/off-peak schedules.
 
-获取策略：**内置快照 + 后台刷新 + 本地缓存**
+**How an update reaches your screen:**
 
-1. 插件包内打包一份 `pricing.json` 快照 —— 安装即用、离线可用
-2. 启动后后台拉取远端，成功后写入本地缓存
-3. 读取优先级：**本地缓存 → 内置快照**
-4. 远端失败 / `schemaVersion` 不支持 / `profiles` 为空 → 丢弃本次结果，
-   沿用上一份可用数据，只记日志，**UI 不受影响**
+1. The **host** fetches the catalog at boot and every `refreshIntervalHours` (default 24h), validates it, and caches it to disk.
+2. The host serves the current catalog over **`GET /peakrate/catalog`**, and re-fetches on demand for **`POST /peakrate/catalog`** (the *Refresh now* button).
+3. The **client** asks for it once at startup and re-renders when it arrives. If the request fails — offline, first run, blocked — it silently falls back to the snapshot bundled at build time, so the badges never disappear because of a network problem.
 
-## 开发
+Because the page reads the host's live catalog, **a data update reaches the badges without rebuilding or reinstalling the plugin**. The bundled snapshot remains as the offline fallback.
 
-```bash
-npm install
-npm test          # 111 项单测（纯函数 + 构建产物契约 + 槽位守卫）
-npm run typecheck
-```
+### The route is fenced
 
-架构：
+`/peakrate/catalog` is not an open endpoint. It applies the same browser-trust fence as the harness's own `/api` route, defending the two confused-deputy paths a browser opens against a local HTTP server:
+
+- **DNS rebinding** — the `Host` header (which rebinding cannot forge) must be loopback or a `trustedHosts` authority; anything else is `403`.
+- **Cross-site requests** — `Sec-Fetch-Site: cross-site` is refused, and any attached `Origin` must match `Host`.
+
+It is a trust fence, **not an authentication layer**: network reachability stays the webserver's business. The endpoint serves public pricing data.
+
+Fetched catalogs are validated strictly: unknown schema versions, malformed clock values, zero-length windows, non-`YYYY-MM-DD` dates and duplicate profile ids are rejected at parse time rather than producing a wrong judgement later.
+
+## Architecture
 
 ```
 src/
-├── index.ts        # host：配置、拉取/缓存/校验/降级，注册 peakrate 服务
-├── schedule.ts     # 纯函数：currentPeriod / formatCountdown
-├── matching.ts     # 纯函数：provider 别名 + 模型归一化 → profile
-├── catalog.ts      # 纯函数：数据源解析与校验
+├── index.ts          host: catalog fetch/cache, user config, settings namespace, route
+├── catalog.ts        parse + validate the catalog document
+├── catalog-route.ts  the fenced /peakrate/catalog route + trust fence
+├── schedule.ts       pure: state at a moment, and the countdown to the next switch
+├── matching.ts       pure: provider alias + model normalisation → profile
+├── coverage.ts       pure: coverage report shared by the panel and the audit script
 └── client/
-    ├── index.tsx   # 替换模型选择器，渲染徽章 / 倒计时 / hover 详情
-    └── style.css   # 仅用 --dsw-* 设计 token
-scripts/
-└── build-client.mjs  # client 半边打包（见下方「两个宿主契约」）
+    ├── index.tsx          registers three surfaces + locale copy
+    ├── live.ts            runtime catalog fetch with bundled fallback
+    ├── ModelSelect.tsx    faithful superset fork of the official selector
+    ├── SettingsSection.tsx coverage card
+    ├── rate.ts            shared rate resolution
+    ├── icons.tsx          inline stroke SVG icons
+    └── style.css          --dsw-* design tokens only
 ```
 
-**零 npm 运行时依赖**：时区与时段计算全部用原生 `Intl` + `Date` 实现。
+`schedule.ts`, `matching.ts` and `coverage.ts` are pure and runtime-independent; every time boundary and matching rule is covered by unit tests.
 
-### 三个宿主契约（改代码前务必知道）
+### Surfaces
 
-DSH 插件的 host 侧与 client 侧走**两套独立 cordis 实例**，都不能凭对常规 ESM 插件
-生态的直觉推断：
+| Where | Slot | Kind |
+|---|---|---|
+| Composer tool row | `conversation.input.left` | additive |
+| Model selector | `conversation.input.model` | **deliberate takeover** (functional superset) |
+| Coverage panel | `settings.plugin.item` | additive, keyed by this plugin's settings namespace |
 
-1. **host 侧服务注册必须 `ctx.provide(name, …)`**，不能用 `ctx.set`。
-   `ctx.set` 只能**覆写已注册**的服务，首次注册会崩
-   `cannot set property "X" without provide`。
-2. **client 半边必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**。
-   服务端把各插件 client bundle **原样拼接**成 classic `<script>` 批量 bundle，
-   裸 ESM `import` 会让**整批**脚本 SyntaxError（浏览器报 `Failed to load plugins`）。
-   因此 `build:client` 走 `scripts/build-client.mjs`（esbuild CJS + 手工包壳），
-   格式与官方插件 `lib/client.js` 一致。
-3. **client 拿不到 host 的服务**——两棵树互相隔离。profile 数据由
-   `scripts/build-client.mjs` 在**构建期注入**（`__PEAKRATE_PROFILES__`）烤进
-   client bundle；注册 slot 时还必须传 `inject: () => ({ peakrate: … })` 提供注入面。
-   **漏掉 inject 的后果是 UI 一个徽章都不显示**（插件加载正常、单测全绿，功能却是死的）。
+The model-selector takeover ships a complete superset of the official component — keyboard navigation, aria wiring, portal positioning, loading, empty, error and retry states, and the reasoning-effort submenu. The upstream package is MIT and the ported version is recorded in `src/client/index.tsx`; the guard test in `test/bundle-contract.test.ts` fails the build if any *other* shipped-UI slot is ever shadowed.
 
-   > 该缺陷的回归测试见 `test/bundle-contract.test.ts`——它从**构建产物**出发验证契约，
-   > 而不是直接给纯函数喂数据（后者正是当初漏掉此缺陷的原因）。
+## Compatibility & contributions
 
-设计文档见 [`.plans/spec/dsh-peakrate-spec.md`](.plans/spec/dsh-peakrate-spec.md)。
+- Requires a DeepSeek Harness build providing the `conversation.input.model` and `settings.plugin.item` slots. Upstream selector ported from `@deepseek-ai/dsh-client-ui-model-selection@0.1.5-rc.1`.
+- Peer dependencies: `@deepseek-ai/cordis`, `@deepseek-ai/schemastery`.
+- **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/). The changelog follows [Keep a Changelog](https://keepachangelog.com/).
+- **Releases** are cut by pushing a `v*` tag; the [release workflow](./.github/workflows/release.yml) runs typecheck + tests, builds, publishes to npm with provenance, and opens the GitHub Release from `CHANGELOG.md`.
+- Issues and pull requests are welcome at [github.com/log-li/dsh-peakrate](https://github.com/log-li/dsh-peakrate).
 
-## 许可
+## Contributors
 
-MIT
+| Contributor | Role |
+|---|---|
+| [@log-li](https://github.com/log-li) | Author and maintainer |
+
+## License
+
+[MIT](./LICENSE) © Logan Lin

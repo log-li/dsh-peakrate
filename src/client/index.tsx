@@ -21,6 +21,12 @@ import { formatCountdown } from '../schedule.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
 import css from './style.css'
 import { rateFor, detailText } from './rate.js'
+import {
+  fetchLiveCatalog,
+  resolveProfiles,
+  subscribeLiveCatalog,
+  liveCatalogStatus,
+} from './live.js'
 import { RateIcon } from './icons.js'
 import { ModelSelect, type DirectoryState } from './ModelSelect.js'
 import { PeakrateSettings } from './SettingsSection.js'
@@ -60,7 +66,9 @@ function bundledProfiles(): RateProfile[] {
 }
 
 const DEFAULT_FACE: PeakrateFace = {
-  profiles: () => bundledProfiles(),
+  // 运行时目录优先（host 每 24h 拉取，经带围栏的 /peakrate/catalog 下发），
+  // 拉不到就静默回退到构建期内置快照 —— 首屏不等网络。
+  profiles: () => resolveProfiles(bundledProfiles()),
   config: () => ({}),
 }
 
@@ -113,6 +121,8 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     () => props.directory.getSnapshot(),
   )
   // 每 30 秒重算一次，让倒计时保持新鲜
+  // 订阅运行时目录：host 下发到手后立即重渲染（否则要等 30s 心跳才更新）
+  React.useSyncExternalStore(subscribeLiveCatalog, liveCatalogStatus, liveCatalogStatus)
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000)
@@ -189,6 +199,13 @@ const zh: Record<string, string> = {
   'settings.colRate': '当前倍率',
   'settings.colProfile': '命中 profile',
   'settings.colCount': '覆盖',
+  'settings.source': '目录来源：{origin} · 更新于 {when}',
+  'settings.originRemote': '远端',
+  'settings.originBuiltin': '内置快照',
+  'settings.never': '未拉取',
+  'settings.refreshNow': '立即刷新',
+  'settings.refreshing': '刷新中…',
+  'settings.sourceFailed': '目录拉取失败（{message}）—— 已回退到内置快照。',
   'settings.colMissing': '未收录的模型',
   'settings.colTarget': '映射到 / 不映射的理由',
   'settings.notCovered': '未收录',
@@ -230,6 +247,13 @@ const en: Record<string, string> = {
   'settings.colRate': 'Current rate',
   'settings.colProfile': 'Matched profile',
   'settings.colCount': 'Covered',
+  'settings.source': 'Catalog: {origin} · updated {when}',
+  'settings.originRemote': 'remote',
+  'settings.originBuiltin': 'bundled snapshot',
+  'settings.never': 'never',
+  'settings.refreshNow': 'Refresh now',
+  'settings.refreshing': 'Refreshing…',
+  'settings.sourceFailed': 'Catalog fetch failed ({message}) — fell back to the bundled snapshot.',
   'settings.colMissing': 'Not covered',
   'settings.colTarget': 'Mapped to / reason for skipping',
   'settings.notCovered': 'not covered',
@@ -330,6 +354,10 @@ export function apply(ctx: Context): void {
         /* 回退到内置中文 */
       }
     }
+
+    // 启动即拉一次运行时目录（host 每 24h 拉取，经带围栏的 /peakrate/catalog 下发）。
+    // 不阻塞首屏：拉不到就静默用构建期内置快照。
+    void fetchLiveCatalog()
 
     // ① 追加式徽章：list 槽位，自有 id = 纯追加
     slots.inject('conversation.input.left', () =>
