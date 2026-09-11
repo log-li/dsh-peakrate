@@ -110,7 +110,7 @@ dsh plugin --profile web add dsh-peakrate
 
 ```bash
 npm install
-npm test          # 83 项单测（纯函数，不依赖 DSH 运行时）
+npm test          # 89 项单测（纯函数 + 构建产物契约）
 npm run typecheck
 ```
 
@@ -131,9 +131,10 @@ scripts/
 
 **零 npm 运行时依赖**：时区与时段计算全部用原生 `Intl` + `Date` 实现。
 
-### 两个宿主契约（改代码前务必知道）
+### 三个宿主契约（改代码前务必知道）
 
-DSH 插件的 host 侧与 client 侧走**两套独立契约**，都不能凭对常规 ESM 插件生态的直觉推断：
+DSH 插件的 host 侧与 client 侧走**两套独立 cordis 实例**，都不能凭对常规 ESM 插件
+生态的直觉推断：
 
 1. **host 侧服务注册必须 `ctx.provide(name, …)`**，不能用 `ctx.set`。
    `ctx.set` 只能**覆写已注册**的服务，首次注册会崩
@@ -143,6 +144,13 @@ DSH 插件的 host 侧与 client 侧走**两套独立契约**，都不能凭对�
    裸 ESM `import` 会让**整批**脚本 SyntaxError（浏览器报 `Failed to load plugins`）。
    因此 `build:client` 走 `scripts/build-client.mjs`（esbuild CJS + 手工包壳），
    格式与官方插件 `lib/client.js` 一致。
+3. **client 拿不到 host 的服务**——两棵树互相隔离。profile 数据由
+   `scripts/build-client.mjs` 在**构建期注入**（`__PEAKRATE_PROFILES__`）烤进
+   client bundle；注册 slot 时还必须传 `inject: () => ({ peakrate: … })` 提供注入面。
+   **漏掉 inject 的后果是 UI 一个徽章都不显示**（插件加载正常、单测全绿，功能却是死的）。
+
+   > 该缺陷的回归测试见 `test/bundle-contract.test.ts`——它从**构建产物**出发验证契约，
+   > 而不是直接给纯函数喂数据（后者正是当初漏掉此缺陷的原因）。
 
 设计文档见 [`.plans/spec/dsh-peakrate-spec.md`](.plans/spec/dsh-peakrate-spec.md)。
 

@@ -197,6 +197,19 @@ dsh-peakrate/
 （与自带 `/model` 弹窗共享同一 `ModelDirectory`，参考 `dsh-model-picker`），
 不自行枚举 provider 配置。
 
+**host ↔ client 数据通路（2026-09-12 补记）**：DSH 的 host 树与 client 树是
+**两套独立 cordis 实例**，client 侧**拿不到** host 的 `ctx.get('peakrate')`。
+因此 profile 数据的供给方式是：
+
+| 半边 | 职责 |
+|---|---|
+| host（`CatalogStore`） | 内置快照 / 本地缓存 / 远端刷新与降级；**权威数据源** |
+| client | **自带一份构建期注入的快照**（`__PEAKRATE_PROFILES__`，由 `scripts/build-client.mjs` 烤进 bundle），保证 UI 立即可用 |
+
+注册 slot 时必须传 `inject: () => ({ peakrate: DEFAULT_FACE })` 提供注入面，
+否则组件读不到数据、**UI 一个徽章都不显示**（见 §13 的缺陷记录）。
+若将来需要把 host 的刷新结果下发到 client，须另加 host↔client RPC 通道。
+
 ## 8. 边界与失败模式
 
 | 场景 | 行为 |
@@ -261,6 +274,33 @@ dsh-peakrate/
 ## 13. 变更历史
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
+
+### 2026-09-12 — 客户端数据供给修复（UI 本会一个徽章都不显示）
+
+- **缺陷**：client 半边用 `(props as { peakrate?: PeakrateFace }).peakrate` 读
+  profile 数据，但注册 slot 时**没有传 `inject` 注入面**，`props.peakrate` 恒为
+  `undefined` → `profiles` 恒为 `[]` → `rateFor()` 全返回 undefined →
+  **UI 一个徽章都不会显示**。插件加载成功、host 正常、单测全绿，但功能实际是死的。
+- **根因**：DSH 的 **host 树与 client 树是两套独立 cordis 实例**，client 侧拿不到
+  host 的 `ctx.get('peakrate')`。spec §7 只写了「host 对外提供 profile 数据」，
+  未说明**这份数据如何跨树到达 client**——实现时想当然地以为 props 里会有。
+- **决策**：client 半边**自带一份构建期注入的快照**。
+  - `scripts/build-client.mjs` 用 esbuild `define` 把 `data/pricing.json` 经
+    `parseCatalog` 校验后的 profiles 注入为 `__PEAKRATE_PROFILES__` 常量，
+    直接烤进 client bundle（当前 14 个 profile）。
+  - `apply()` 注册时传 `inject: () => ({ peakrate: DEFAULT_FACE })`，与官方
+    `dsh-client-ui-model-selection` 的注册写法同构（已对照其产物确认）。
+  - host 侧仍负责远端刷新与缓存（`CatalogStore`）；**将来若需把刷新结果下发到
+    client，须另加 host↔client 的 RPC 通道**，本次不做（当前快照足够）。
+- **测试盲区与补救**：原 83 项单测**全部通过**却没发现此缺陷——因为它们都直接给
+  `rateFor()` 传 profiles，绕过了「数据如何到达组件」这一环。新增
+  `test/bundle-contract.test.ts`（6 项）从**构建产物**出发验证契约：
+  产物是 `__ModuleLoader__` 包裹的 CJS、可被 classic script 解析、`register` 必须带
+  `inject` 且注入面能给出非空 profiles、端到端能算出正确判定。
+  **已反向验证**：临时回退 inject 后该测试 3 项失败，证明测试不是空转。
+- **后续结果**：修复后端到端验证通过——客户端拿到 14 个 profile，同一时刻
+  `ollama` 判 peak 2×、`deepseek-official` 判 offPeak 1×（核心证据成立），
+  未匹配模型返回 undefined。单测 89 项全绿。
 
 ### 2026-09-12 — 首次实机加载修复（两个致命坑）
 

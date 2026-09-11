@@ -60,6 +60,12 @@ dsh-peakrate/
   bundle script … failed to load`）。正确做法：esbuild 打 CJS 后手工包一层
   `window.__ModuleLoader__.load({ id, factory: (require) => { …return module.exports } })`
   （与官方/第三方插件 lib/client.js 格式一致）。
+- **client 拿不到 host 的服务，且注册 slot 必须传 `inject`**：host 树与 client 树是
+  两套独立 cordis 实例，client 侧 `ctx.get('peakrate')` 拿不到 host 的服务。数据要靠
+  ① 构建期注入（`__PEAKRATE_PROFILES__` 烤进 bundle）+ ② 注册时传
+  `inject: () => ({ peakrate: … })` 提供注入面。**漏掉 inject 的后果极隐蔽**：
+  插件加载成功、host 正常、单测全绿，但组件读到的数据恒为空 → **UI 一个徽章都不显示**。
+  回归测试见 `test/bundle-contract.test.ts`（从构建产物验证，而非直接喂纯函数）。
 
 - **一条插件只能有一条注册路径**：要么 profile `package.json` 的
   `dsh.profile.bundles`，要么 `cordis.patch.yml` 手动 `insert`，**绝不能两者都做**
@@ -90,7 +96,9 @@ dsh-peakrate/
 
 - **Spec 先行**：行为/配置变化 → 先更新 spec（`.plans/spec/dsh-peakrate-spec.md `）
 - **README 同步**：配置项/命令/默认值变化 → 一并更新 README
-- **push 前**：代码改动须经一次「独立模型家族」review（无【严重】问题才可 push）
+- **独立模型家族 review 在验证之前**：顺序固定为
+  **写代码 → 独立 review → 按 review 修正 → 验证 → commit → push**。
+  review 未过（有【严重】问题）不得进入验证；验证通过后再改代码须重新验证。
 - **push 前敏感信息检查**：不落本机绝对路径、用户名、本地 provider 路由组合
 
 ## 文档落位

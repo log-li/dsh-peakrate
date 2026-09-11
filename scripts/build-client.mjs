@@ -6,8 +6,34 @@
 //   window.__ModuleLoader__.load({ id, factory: (require) => { ...CJS... } })
 //
 // The factory's `require` shim resolves externals (react, @deepseek-ai/*).
+//
+// The client half cannot reach the host's cordis services (host tree and client
+// tree are separate instances), so the profile snapshot is injected here at
+// build time as a `define` constant and baked into the bundle.
 import { build } from 'esbuild'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+
+// Inject the same snapshot the host half ships (data/pricing.json), validated
+// with the shared parser so the client sees exactly the host's shape.
+const raw = JSON.parse(readFileSync('data/pricing.json', 'utf8'))
+
+// Validate via esbuild's own transform pipeline (catalog.ts is TypeScript, so it
+// cannot be imported by plain node). Bundling it here also keeps a single
+// source of truth for the validation rules.
+const catalogBundle = await build({
+  entryPoints: ['src/catalog.ts'],
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  write: false,
+})
+const catalogMod = await import(
+  `data:text/javascript;base64,${Buffer.from(catalogBundle.outputFiles[0].text).toString('base64')}`
+)
+const parsed = catalogMod.parseCatalog(raw)
+if (parsed === undefined) {
+  throw new Error('data/pricing.json failed validation — refusing to build client')
+}
 
 const result = await build({
   entryPoints: ['src/client/index.tsx'],
@@ -16,6 +42,9 @@ const result = await build({
   format: 'cjs',
   external: ['react', '@deepseek-ai/*'],
   loader: { '.css': 'text' },
+  define: {
+    __PEAKRATE_PROFILES__: JSON.stringify(parsed.profiles),
+  },
   write: false,
 })
 const code = result.outputFiles[0].text
@@ -30,4 +59,6 @@ ${code}
 });
 `
 writeFileSync('lib/client.js', wrapped)
-console.log(`lib/client.js written (${wrapped.length} bytes, wrapped in __ModuleLoader__.load)`)
+console.log(
+  `lib/client.js written (${wrapped.length} bytes, ${parsed.profiles.length} profiles baked in)`,
+)

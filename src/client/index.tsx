@@ -114,12 +114,34 @@ export function RateDetail({ state }: { state: RateState | undefined }): React.R
   )
 }
 
-/** 注入面：host 侧提供的 profile 数据。 */
+/** 注入面：由 `inject` 提供给组件的 profile 数据。 */
 interface PeakrateFace {
   profiles: () => RateProfile[]
   updatedAt: () => string | undefined
-  refresh: () => Promise<boolean>
   config: () => MatchConfig
+}
+
+/**
+ * 默认注入面：**构建期打包进 client 的数据**。
+ *
+ * 为什么不是从 host 服务读：DSH 的 host 树与 client 树是两套独立 cordis 实例，
+ * client 侧插件拿不到 host 的 `ctx.get('peakrate')`。因此 client 半边自带一份
+ * profile 快照（由 `scripts/build-client.mjs` 在打包时注入），保证 UI 立即可用；
+ * host 侧仍负责远端刷新与缓存（供将来经 RPC 下发用）。
+ *
+ * `scripts/build-client.mjs` 会把 `__PEAKRATE_PROFILES__` 替换为实际数据。
+ */
+declare const __PEAKRATE_PROFILES__: RateProfile[] | undefined
+
+function bundledProfiles(): RateProfile[] {
+  // 打包器未注入时（如单测直接 import）回退空数组，不抛错。
+  return typeof __PEAKRATE_PROFILES__ === 'undefined' ? [] : __PEAKRATE_PROFILES__
+}
+
+const DEFAULT_FACE: PeakrateFace = {
+  profiles: () => bundledProfiles(),
+  updatedAt: () => undefined,
+  config: () => ({}),
 }
 
 /**
@@ -145,6 +167,8 @@ export function PeakrateModelSelect(props: {
   }
   select: (selection: { provider: string; model: string }) => Promise<boolean>
   locked?: boolean
+  /** 由注册时的 `inject` 提供；缺省时用构建期打包的内置快照。 */
+  peakrate?: PeakrateFace
 }): React.ReactElement | null {
   const state = React.useSyncExternalStore(
     (fn) => props.directory.subscribe(fn),
@@ -159,9 +183,9 @@ export function PeakrateModelSelect(props: {
     return () => clearInterval(timer)
   }, [])
 
-  const peakrate = (props as { peakrate?: PeakrateFace }).peakrate
-  const profiles = React.useMemo(() => peakrate?.profiles() ?? [], [peakrate, state.status])
-  const config = React.useMemo(() => peakrate?.config() ?? {}, [peakrate])
+  const peakrate = props.peakrate ?? DEFAULT_FACE
+  const profiles = peakrate.profiles()
+  const config = peakrate.config()
 
   const choices: Choice[] = React.useMemo(
     () =>
@@ -247,7 +271,14 @@ export function apply(ctx: Context): void {
   if (slots === undefined) return
 
   slots.inject('conversation.input.model', () =>
-    slots.register({ name: 'conversation.input.model' }, PeakrateModelSelect),
+    slots.register(
+      {
+        name: 'conversation.input.model',
+        // 与官方插件同构：inject 返回组件的注入面。
+        inject: () => ({ peakrate: DEFAULT_FACE }),
+      },
+      PeakrateModelSelect,
+    ),
   )
 }
 
