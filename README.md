@@ -123,9 +123,11 @@ Judgement is made against a curated catalog, so a provider is either **mapped** 
 
 ## Coverage panel
 
+**Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a
+silent misconfiguration**, and **refresh the catalog**.
+
 <img src="docs/coverage-card.png" width="560" alt="Coverage panel under Settings → Plugins" />
 
-Under **Settings → Plugins → Plugin configuration**:
 
 | Column | Meaning |
 |---|---|
@@ -135,7 +137,9 @@ Under **Settings → Plugins → Plugin configuration**:
 
 A provider where **nothing at all** matched is raised to the top as a warning. Partial coverage is deliberately *not* flagged: a provider commonly mixes models with and without time-based pricing (an Ollama group holding both DeepSeek and GLM, for instance), and flagging every such row would be noise.
 
-The panel also shows where the current catalog came from — *remote* or *bundled snapshot* — with a **Refresh now** button, and `enabled` / `refreshIntervalHours` are editable here and take effect immediately.
+The **source line** at the top (visible in the screenshot above) reports whether the current catalog
+is the *remote* one or the *bundled snapshot*, with **Refresh now** beside it. `enabled` and
+`refreshIntervalHours` are editable here and take effect immediately.
 
 ## Configuration
 
@@ -174,7 +178,10 @@ Configuration lives in the profile's `cordis.patch.yml`:
 
 `modelMappings` entries are prefix matches by default; set `matchIsRegex: true` for a regular expression. Invalid regexes do not throw — they simply never match.
 
-> **`customProfiles` is host-side only.** The client half cannot receive the user config over the client/host boundary, so a custom profile affects the host, the coverage panel and the served catalog but not the badges. Extra *providers* are fully supported through `providerAliases` + `modelMappings`; extra *profiles* are the limitation.
+> **`customProfiles` fully applies, badges included.** The host serves its merged catalog over
+> `/peakrate/catalog`, so a custom profile takes part in badge judgement exactly like a bundled one —
+> either overriding a bundled entry by `id`, or adding a new one. Verified: pointing `deepseek-v4`
+> at a custom profile with `peak: 9×` changes both the served catalog and the badge to `9×`.
 
 ## Data source & freshness
 

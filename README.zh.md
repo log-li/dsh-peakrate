@@ -124,9 +124,10 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 ## 覆盖面板
 
+**设置 → 插件 → 插件配置**。它承担三件事：**看清覆盖**、**发现漏配**、**刷新目录**。
+
 <img src="docs/coverage-card.png" width="560" alt="设置 → 插件 里的覆盖面板" />
 
-位于 **设置 → 插件 → 插件配置**：
 
 | 列 | 含义 |
 |---|---|
@@ -136,7 +137,8 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 **整组零命中**的 provider 会被顶到前面并告警。**部分未命中刻意不告警**：同一个 provider 下常混有「有/无时段计价」两类模型（比如一个 Ollama 分组里既有 DeepSeek 又有 GLM），每行都提示等于没提示。
 
-面板还会显示当前目录来自**远端**还是**内置快照**，并带一个**「立即刷新」**按钮；`enabled` 与 `refreshIntervalHours` 也可在此编辑，即时生效。
+面板顶部的**数据来源行**（如上图的「目录来源：远端 · 更新于 …」）说明当前用的是远端目录还是内置快照；
+右侧**「立即刷新」**强制重新拉取一次。`enabled` 与 `refreshIntervalHours` 也在这里编辑，**即时生效**。
 
 ## 配置
 
@@ -175,7 +177,9 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 `modelMappings` 默认是**前缀匹配**；写 `matchIsRegex: true` 则按正则。非法正则**不抛错**，只是永不命中。
 
-> **`customProfiles` 仅 host 侧生效。** client 半边无法跨 client/host 边界拿到用户配置，所以自定义 profile 会影响 host、覆盖面板与下发的目录，但**不影响徽章**。额外 *provider* 通过 `providerAliases` + `modelMappings` 完全支持；受限的是额外 *profile*。
+> **`customProfiles` 完全生效**（含徽章）。host 会把合并后的目录经 `/peakrate/catalog` 下发给页面，
+> 所以自定义 profile 与内置条目一样参与徽章判定 —— 按 `id` 覆盖内置条目，或追加新条目。
+> 实测：给 `deepseek-v4` 写一条 `peak: 9×` 的自定义 profile，下发的目录与徽章都变成 `9×`。
 
 ## 数据来源与新鲜度
 
