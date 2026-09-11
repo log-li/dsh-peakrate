@@ -69,8 +69,8 @@
     "verify": "npm run typecheck && npm test"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/schemastery": "*"
+    "@deepseek-ai/cordis": ">=4 <5",
+    "@deepseek-ai/schemastery": ">=3 <4"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
