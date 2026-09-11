@@ -52,23 +52,24 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && tsdown",
+    "build": "npm run build:types && npm run build:host && npm run build:client",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build:host": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --outfile=lib/index.js",
+    "build:client": "esbuild src/client/index.tsx --bundle --platform=browser --format=esm --external:react --external:@deepseek-ai/* --loader:.css=text --outfile=lib/client.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "sync-data": "node scripts/sync-data.mjs"
+    "test:watch": "vitest"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "@types/node": "^22.20.2",
     "@types/react": "^19.3.0",
+    "esbuild": "^0.28.2",
     "react": "^19.3.0",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
-  },
-  "dependencies": {
-    "@types/node": "^22.20.2"
   }
 }
