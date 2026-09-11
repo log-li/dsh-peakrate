@@ -173,9 +173,17 @@
 }
 
 /* 活动态（campaign）：品牌色，与峰/谷区分 */
+/* 活动态：
+ * - 背景**必须与峰/谷一致**（`--dsw-alias-interactive-bg-hover`）。曾用
+ *   `--dsw-alias-bg-layer-2`，实测在 light 主题下解析为纯白 `rgb(255,255,255)`
+ *   → 与峰/谷的 rgba(38,49,72,0.06) 明显不一致（用户实测发现）。
+ * - 文字用 success 色：与峰（warn 橙）和谷（label 灰）都能区分，且语义上
+ *   「限时优惠」偏正面。曾用 `--dsw-alias-brand-primary`，实测是近黑
+ *   `rgb(15,17,21)`，与正文无差别。
+ */
 .dsh-peakrate-campaign {
-  color: var(--dsw-alias-brand-primary);
-  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* 设置页折叠块的头部按钮 */
@@ -227,9 +235,11 @@
   padding: 4px 2px 8px;
 }
 
-/* 涨跌方向箭头：↑ 之后变贵、↓ 之后变便宜 */
+/* 涨跌方向箭头：↑ 之后变贵、↓ 之后变便宜。
+ * 用 label-secondary 而非 label-dimmed —— 后者实测是 rgb(225,229,238)
+ * （浅主题下几乎不可见，那是「禁用态」色，不该用于传达信息）。 */
 .dsh-peakrate-ms-rateTrend {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-secondary);
 }
 
 /* 菜单再宽一点，容纳「倍率 + 倒计时 + 方向」而不裁切 */
