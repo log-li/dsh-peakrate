@@ -110,31 +110,123 @@ function normalizedWindows(schedule: Schedule): { start: number; end: number }[]
  * 翻转点只可能出现在：某个窗口的 start（谷→峰）或 end（峰→谷）。
  * 逐日向后扫描（最多 8 天，足以覆盖任意 peakDays 组合）以保证跨日、
  * 跨周末都正确。
+ *
+ * **DST 处理**：不能简单用 `dayOffset * 1440` 累加——夏令时切换当天只有
+ * 1380 或 1500 分钟，那样算出的倒计时会整整差一小时。这里改为：先用
+ * 墙上时间定位「翻转点所在的墙上时刻」，再用真实时间戳求差值，从而在
+ * 任意时区、任意 DST 切换日都得到正确的实际等待时长。
  */
-function minutesUntilFlip(schedule: Schedule, weekday: number, minutes: number): number {
+function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minutes: number): number {
   const windows = normalizedWindows(schedule)
   if (windows.length === 0) return Number.POSITIVE_INFINITY
 
+  // 翻转点在「第几天 + 当天第几分钟」的墙上坐标。
+  type WallPoint = { dayOffset: number; minuteOfDay: number }
+
+  const found: WallPoint[] = []
   for (let dayOffset = 0; dayOffset <= 8; dayOffset++) {
     const day = (weekday + dayOffset) % 7
-    const base = dayOffset * 1440
-    const peakToday = isPeakDay(schedule, day)
-
-    // 峰时天：窗口 start/end 都是翻转点；谷时天没有任何窗口。
-    if (!peakToday) continue
-
-    const candidates: number[] = []
+    if (!isPeakDay(schedule, day)) continue
     for (const w of windows) {
-      candidates.push(w.start, w.end)
-    }
-    candidates.sort((a, b) => a - b)
-
-    for (const c of candidates) {
-      const delta = base + c - minutes
-      if (delta > 0) return delta
+      for (const c of [w.start, w.end]) {
+        // 跨午夜的窗口 end 会 > 1440，归属到「次日」
+        const extraDay = Math.floor(c / 1440)
+        const minuteOfDay = c % 1440
+        // 只有当该墙上时刻确实晚于「现在」，才可能是下一个翻转点
+        if (dayOffset * 1440 + c > minutes) {
+          found.push({ dayOffset: dayOffset + extraDay, minuteOfDay })
+        }
+      }
     }
   }
-  return Number.POSITIVE_INFINITY
+  if (found.length === 0) return Number.POSITIVE_INFINITY
+
+  // 把墙上坐标转成真实时间戳，取最早的一个，再用真实毫秒差求分钟数。
+  let best = Number.POSITIVE_INFINITY
+  for (const p of found) {
+    const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
+    if (ts === undefined) continue
+    const deltaMs = ts - now.getTime()
+    if (deltaMs > 0 && deltaMs < best) best = deltaMs
+  }
+  return Number.isFinite(best) ? Math.round(best / 60000) : Number.POSITIVE_INFINITY
+}
+
+/**
+ * 把「基准日 + N 天 + 当天第 M 分钟」的墙上坐标，解析为该时区下的真实时间戳。
+ *
+ * 做法：用基准日在该时区的墙上日期做日历加法，得到目标墙上日期，
+ * 再解出对应的 UTC 时刻。这样即使目标日处于 DST 切换前后，也能得到
+ * 正确的绝对时间。
+ *
+ * @returns 目标时间戳；无法解析时返回 undefined。
+ */
+function wallClockToTimestamp(
+  timeZone: string,
+  base: Date,
+  dayOffset: number,
+  minuteOfDay: number,
+): number | undefined {
+  // 基准日在该时区的墙上日期（年/月/日）
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(base)
+  let y = 0
+  let mo = 0
+  let d = 0
+  for (const p of parts) {
+    if (p.type === 'year') y = Number(p.value)
+    else if (p.type === 'month') mo = Number(p.value)
+    else if (p.type === 'day') d = Number(p.value)
+  }
+  if (y === 0 || mo === 0 || d === 0) return undefined
+
+  // 目标墙上日期 = 基准墙上日期 + dayOffset 天（用 UTC 日历避免本地时区干扰）
+  const target = new Date(Date.UTC(y, mo - 1, d))
+  target.setUTCDate(target.getUTCDate() + dayOffset)
+  const ty = target.getUTCFullYear()
+  const tmo = target.getUTCMonth() + 1
+  const td = target.getUTCDate()
+
+  const hh = Math.floor(minuteOfDay / 60)
+  const mm = minuteOfDay % 60
+
+  // 解出该墙上时刻对应的 UTC 时间戳：先按 UTC 猜一个，再用该时区的实际偏移修正。
+  const guess = Date.UTC(ty, tmo - 1, td, hh, mm)
+  const offset1 = tzOffsetMs(timeZone, new Date(guess))
+  let ts = guess - offset1
+  // 再迭代一次，处理「猜测点恰好落在切换另一侧」的情况
+  const offset2 = tzOffsetMs(timeZone, new Date(ts))
+  if (offset2 !== offset1) ts = guess - offset2
+  return ts
+}
+
+/** 求某时刻在指定时区相对 UTC 的偏移（毫秒）。 */
+function tzOffsetMs(timeZone: string, at: Date): number {
+  // 用 formatToParts 取该时区的墙上时间，与 UTC 墙上时间之差即偏移。
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at)
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0')
+  const asUTC = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour') % 24,
+    get('minute'),
+    get('second'),
+  )
+  return asUTC - at.getTime()
 }
 
 /**
@@ -148,7 +240,7 @@ export function currentPeriod(schedule: Schedule, now: Date): PeriodResult {
   const { weekday, minutes } = wallClock(now, schedule.timeZone)
   const peak = isPeakDay(schedule, weekday) && inPeakWindow(schedule, minutes)
   const period: Period = peak ? 'peak' : 'offPeak'
-  const minutesUntilSwitch = minutesUntilFlip(schedule, weekday, minutes)
+  const minutesUntilSwitch = minutesUntilFlip(schedule, now, weekday, minutes)
   return { period, minutesUntilSwitch }
 }
 

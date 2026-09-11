@@ -196,3 +196,87 @@ describe('formatCountdown', () => {
     expect(formatCountdown(Number.POSITIVE_INFINITY)).toBe('')
   })
 })
+
+describe('DST（夏令时）—— 倒计时必须按真实时间差计算', () => {
+  /** 真值：逐分钟向前找第一个时段翻转点。 */
+  function groundTruth(schedule: Schedule, now: Date): number {
+    const start = currentPeriod(schedule, now).period
+    for (let i = 1; i <= 60 * 24 * 4; i++) {
+      if (currentPeriod(schedule, new Date(now.getTime() + i * 60_000)).period !== start) return i
+    }
+    return Number.POSITIVE_INFINITY
+  }
+
+  /** 每天 12:00-18:00，用于暴露 DST 日的日长偏差。 */
+  const DAILY: Schedule = {
+    timeZone: 'America/New_York',
+    peakDays: [0, 1, 2, 3, 4, 5, 6],
+    peakWindows: [{ start: '12:00', end: '18:00' }],
+  }
+
+  it('春季前跳（2026-03-08）各时刻与真值一致', () => {
+    for (const h of [0, 1, 2, 3, 10, 11]) {
+      const now = new Date(Date.UTC(2026, 2, 8, h, 0))
+      expect(currentPeriod(DAILY, now).minutesUntilSwitch, `UTC ${h}:00`).toBe(groundTruth(DAILY, now))
+    }
+  })
+
+  it('秋季回拨（2026-11-01）各时刻与真值一致', () => {
+    for (const h of [0, 1, 2, 3, 10, 11]) {
+      const now = new Date(Date.UTC(2026, 10, 1, h, 0))
+      expect(currentPeriod(DAILY, now).minutesUntilSwitch, `UTC ${h}:00`).toBe(groundTruth(DAILY, now))
+    }
+  })
+
+  it('数据源里真实的 DST 时区 profile（America/Los_Angeles）也正确', () => {
+    // swarms-swarm-completions：每天 06:00-20:00，America/Los_Angeles
+    const swarms: Schedule = {
+      timeZone: 'America/Los_Angeles',
+      peakDays: [0, 1, 2, 3, 4, 5, 6],
+      peakWindows: [{ start: '06:00', end: '20:00' }],
+    }
+    // 2026-03-08 是 DST 切换日
+    for (const h of [0, 6, 12, 18, 22]) {
+      const now = new Date(Date.UTC(2026, 2, 8, h, 0))
+      expect(currentPeriod(swarms, now).minutesUntilSwitch, `UTC ${h}:00`).toBe(
+        groundTruth(swarms, now),
+      )
+    }
+  })
+
+  it('非 DST 时区（Asia/Shanghai）行为不变', () => {
+    const sh: Schedule = {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [0, 1, 2, 3, 4, 5, 6],
+      peakWindows: [{ start: '08:00', end: '00:00' }],
+    }
+    for (const h of [0, 4, 8, 15, 23]) {
+      const now = new Date(Date.UTC(2026, 5, 15, h, 0))
+      expect(currentPeriod(sh, now).minutesUntilSwitch, `UTC ${h}:00`).toBe(groundTruth(sh, now))
+    }
+  })
+})
+
+describe('★ 穷举：8 天扫描上界对任意 peakDays 子集都充分', () => {
+  it('127 种非空 peakDays 组合 × 8 天（每 2 小时采样），均不返回 Infinity', () => {
+    const days = [0, 1, 2, 3, 4, 5, 6]
+    const bad: string[] = []
+    for (let mask = 1; mask < 128; mask++) {
+      const peakDays = days.filter((_, i) => (mask & (1 << i)) !== 0)
+      const schedule: Schedule = {
+        timeZone: 'UTC',
+        peakDays,
+        peakWindows: [{ start: '12:00', end: '18:00' }],
+      }
+      for (let d = 0; d < 8; d++) {
+        for (let m = 0; m < 1440; m += 120) {
+          const t = new Date(Date.UTC(2026, 8, 14 + d, 0, m))
+          if (!Number.isFinite(currentPeriod(schedule, t).minutesUntilSwitch)) {
+            bad.push(`${peakDays.join('/')} @ ${t.toISOString()}`)
+          }
+        }
+      }
+    }
+    expect(bad).toEqual([])
+  })
+})
