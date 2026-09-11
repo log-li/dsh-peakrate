@@ -78,10 +78,6 @@ dsh plugin add ./path/to/dsh-peakrate
 
 Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a `0.8× credits` plan, and a limited-time `Campaign` window. Models with no time-based pricing simply carry no badge — that is the honest state, not a missing lookup.
 
-**In the composer tool row** — the current model's rate, always visible, no menu required:
-
-<img src="docs/chip.png" width="560" alt="Rate badge in the composer tool row" />
-
 **Hover the badge** for the detail: the state now, and what it becomes and when. The card is drawn
 by the plugin itself (not an OS tooltip), so it follows the theme and is reachable by keyboard
 focus too:
@@ -215,25 +211,16 @@ Fetched catalogs are validated strictly: unknown schema versions, malformed cloc
 
 ## Architecture
 
-```
-src/
-├── index.ts          host: catalog fetch/cache, user config, settings namespace, route
-├── catalog.ts        parse + validate the catalog document
-├── catalog-route.ts  the fenced /peakrate/catalog route + trust fence
-├── schedule.ts       pure: state at a moment, and the countdown to the next switch
-├── matching.ts       pure: provider alias + model normalisation → profile
-├── coverage.ts       pure: coverage report shared by the panel and the audit script
-└── client/
-    ├── index.tsx          registers three surfaces + locale copy
-    ├── live.ts            runtime catalog fetch with bundled fallback
-    ├── ModelSelect.tsx    faithful superset fork of the official selector
-    ├── SettingsSection.tsx coverage card
-    ├── rate.ts            shared rate resolution
-    ├── icons.tsx          inline stroke SVG icons
-    └── style.css          --dsw-* design tokens only
-```
+| Module | Responsibility |
+|---|---|
+| `index.ts` | host: catalog fetch/cache, user config, settings namespace, serving route |
+| `catalog.ts` | parse + validate the catalog document |
+| `catalog-route.ts` | the fenced `/peakrate/catalog` route |
+| `schedule.ts` · `matching.ts` · `coverage.ts` | **pure**: state + countdown / provider+model matching / coverage report |
+| `client/` | the three surfaces, runtime catalog fetch with fallback, selector fork, icons, styles |
 
-`schedule.ts`, `matching.ts` and `coverage.ts` are pure and runtime-independent; every time boundary and matching rule is covered by unit tests.
+`schedule.ts`, `matching.ts` and `coverage.ts` are pure and runtime-independent; every time boundary
+and matching rule is covered by unit tests.
 
 ### Surfaces
 

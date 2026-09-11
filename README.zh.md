@@ -79,10 +79,6 @@ dsh plugin add ./path/to/dsh-peakrate
 上图里四种倍率形态同时在场：`2×` 峰时、`1×` 与 `0.5×` 谷时、`0.8× credits` 套餐、以及限时的 `Campaign` 活动。
 没有时段计价的模型**就是不带徽章** —— 那是诚实的状态，不是漏查。
 
-**composer 工具行里** —— 当前模型的倍率，始终可见：
-
-<img src="docs/chip.png" width="560" alt="composer 工具行里的倍率徽章" />
-
 **悬停徽章**看详情：此刻什么态、多久之后变成什么。浮层由插件**自己绘制**（非系统 tooltip），
 跟随明暗主题，键盘聚焦同样能唤出：
 
@@ -212,25 +208,15 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 ## 架构
 
-```
-src/
-├── index.ts          host：目录拉取/缓存、用户配置、settings 命名空间、路由
-├── catalog.ts        解析并校验目录文档
-├── catalog-route.ts  带信任围栏的 /peakrate/catalog 路由
-├── schedule.ts       纯函数：某时刻的状态，以及到下一次切换的倒计时
-├── matching.ts       纯函数：provider 别名 + 模型归一化 → profile
-├── coverage.ts       纯函数：覆盖报告（面板与审计脚本共用）
-└── client/
-    ├── index.tsx          注册三处呈现 + locale 文案
-    ├── live.ts            运行时目录拉取与内置回退
-    ├── ModelSelect.tsx    官方选择器的忠实功能超集 fork
-    ├── SettingsSection.tsx 覆盖卡片
-    ├── rate.ts            共享的倍率解析
-    ├── icons.tsx          内联描边 SVG 图标
-    └── style.css          只用 --dsw-* 设计 token
-```
+| 模块 | 职责 |
+|---|---|
+| `index.ts` | host：目录拉取/缓存、用户配置、settings 命名空间、下发路由 |
+| `catalog.ts` | 解析并校验目录文档 |
+| `catalog-route.ts` | 带信任围栏的 `/peakrate/catalog` 路由 |
+| `schedule.ts` · `matching.ts` · `coverage.ts` | **纯函数**：时段判定与倒计时 / provider+模型匹配 / 覆盖报告 |
+| `client/` | 三处呈现、运行时目录拉取与回退、选择器 fork、图标与样式 |
 
-`schedule.ts`、`matching.ts`、`coverage.ts` 是纯函数、不依赖运行时；所有时间边界与匹配规则都由单测覆盖。
+`schedule.ts`、`matching.ts`、`coverage.ts` 不依赖 DSH 运行时，所有时间边界与匹配规则都由单测覆盖。
 
 ### 三处呈现
 
