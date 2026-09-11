@@ -237,7 +237,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 误当成「上游是否有峰谷定价」。防范机制见 spec §4.4。
 
 **做法**（每次装机前）：
-1. 打开 **设置 → 模型峰谷倍率**，通读「当前覆盖情况」表；
+1. 打开 **设置 → 插件 → 插件配置 → 模型峰谷倍率**，通读「当前覆盖情况」表；
 2. 若顶部出现 **⚠ N 个 provider 完全没有命中** 告警 → **逐个确认**：
    - 「确实没有峰谷定价」→ 在 `src/matching.ts` 的 `UNMATCHED_BY_DESIGN` 写明理由；
    - 「endpoint 未被识别 / 漏配」→ 补 `DEFAULT_PROVIDER_ALIASES` + 映射 + 回归测试。
