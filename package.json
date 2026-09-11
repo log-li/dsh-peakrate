@@ -55,7 +55,7 @@
     "build": "npm run build:types && npm run build:host && npm run build:client",
     "build:types": "tsc -p tsconfig.build.json",
     "build:host": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@deepseek-ai/* --outfile=lib/index.js",
-    "build:client": "esbuild src/client/index.tsx --bundle --platform=browser --format=esm --external:react --external:@deepseek-ai/* --loader:.css=text --outfile=lib/client.js",
+    "build:client": "node scripts/build-client.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

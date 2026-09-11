@@ -125,9 +125,24 @@ src/
 └── client/
     ├── index.tsx   # 替换模型选择器，渲染徽章 / 倒计时 / hover 详情
     └── style.css   # 仅用 --dsw-* 设计 token
+scripts/
+└── build-client.mjs  # client 半边打包（见下方「两个宿主契约」）
 ```
 
 **零 npm 运行时依赖**：时区与时段计算全部用原生 `Intl` + `Date` 实现。
+
+### 两个宿主契约（改代码前务必知道）
+
+DSH 插件的 host 侧与 client 侧走**两套独立契约**，都不能凭对常规 ESM 插件生态的直觉推断：
+
+1. **host 侧服务注册必须 `ctx.provide(name, …)`**，不能用 `ctx.set`。
+   `ctx.set` 只能**覆写已注册**的服务，首次注册会崩
+   `cannot set property "X" without provide`。
+2. **client 半边必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**。
+   服务端把各插件 client bundle **原样拼接**成 classic `<script>` 批量 bundle，
+   裸 ESM `import` 会让**整批**脚本 SyntaxError（浏览器报 `Failed to load plugins`）。
+   因此 `build:client` 走 `scripts/build-client.mjs`（esbuild CJS + 手工包壳），
+   格式与官方插件 `lib/client.js` 一致。
 
 设计文档见 [`.plans/spec/dsh-peakrate-spec.md`](.plans/spec/dsh-peakrate-spec.md)。
 

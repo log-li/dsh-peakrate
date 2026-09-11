@@ -225,7 +225,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   store.load()
 
   // 提供 host 侧服务，client 半边通过同名 service 读取。
-  ctx.set('peakrate', {
+  // 注意：cordis 中首次注册必须用 ctx.provide（ctx.set 只能覆写已注册的服务）。
+  ctx.provide('peakrate', {
     profiles: () => store.profiles(),
     updatedAt: () => store.updatedAt(),
     refresh: () => store.refresh(),

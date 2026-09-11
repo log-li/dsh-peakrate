@@ -262,6 +262,38 @@ dsh-peakrate/
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
 
+### 2026-09-12 — 首次实机加载修复（两个致命坑）
+
+首次装进 web profile 后启动失败，暴露两个 spec 未预见的宿主约束。两者均已修复并
+验证，并写入项目 `AGENTS.md` 的「DSH 插件通用坑」。
+
+1. **host 服务注册必须用 `ctx.provide`，不能用 `ctx.set`**
+   - 现象：启动即崩 `cannot set property "peakrate" without provide`。
+   - 根因：cordis 里 `ctx.set(name, …)` **只能覆写已注册**的服务；首次注册必须
+     `ctx.provide(name, …)`。spec §7 只写了「注册为服务」，未指定 API，实现时想当然
+     用了 `ctx.set`。
+   - 验证：在真实 `Context` 下复现——`app.set('nonexistent-svc', …)` 抛
+     `cannot set property "nonexistent-svc" without provide`；改用 `ctx.provide` 后
+     `app.get('peakrate')` 正常返回、14 个 profile 可读。
+
+2. **client 包必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**
+   - 现象：浏览器报 `Failed to load plugins`（`client-modules: bundle script … failed
+     to load`），**整批插件脚本**一起挂掉。
+   - 根因：服务端把各插件的 client bundle **原样拼接**成 classic `<script>` 批量
+     bundle。原构建用 esbuild `--format=esm --external:react`，产出里留有裸
+     `import * as React from "react"` → 拼进 classic script 后整批 SyntaxError。
+   - 修复：`scripts/build-client.mjs` 改为 esbuild 打 **CJS**，再手工包一层
+     `window.__ModuleLoader__.load({ id: "dsh-peakrate", factory: (require) => {…} })`，
+     与官方/第三方插件 `lib/client.js` 格式完全一致（已逐字对照
+     `dsh-client-ui-model-selection/lib/client.js` 确认）。
+
+- **后续结果**：两个修复落地后，插件成功加载——证据是 host 侧写出了本地缓存
+  `$DSH_HOME/dsh-peakrate/pricing.json`（14984 字节 / 14 profiles），说明 `apply()`
+  完整跑通。**§10 的 UI 实机验收仍待人工确认。**
+- **教训（已入 AGENTS.md）**：DSH 插件有两套独立的打包/注册契约，host 侧是 cordis
+  服务生命周期、client 侧是 `__ModuleLoader__` 的 CJS 工厂协议；两者都不能凭对
+  ESM/常规插件生态的直觉推断，必须对照官方插件产物核实。
+
 ### 2026-09-12 — 阶段 1–4 实现完成（代码落地）
 
 - **决策**：按 §12 完成阶段 1–4——纯函数核心、host 数据层、client UI、构建与文档。

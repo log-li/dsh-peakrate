@@ -50,6 +50,17 @@ dsh-peakrate/
 
 ## DSH 插件通用坑（踩过的）
 
+- **host 侧 `ctx.set` 必须先 `ctx.provide`**：cordis 里 `ctx.set(name, …)` 只能
+  **覆写已注册**的服务；首次注册必须 `ctx.provide(name, …)`，否则启动即崩
+  `cannot set property "X" without provide`（实测：dsh-peakrate 首发踩坑）。
+- **client 包必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**：
+  服务端把各插件 client bundle **原样拼接**成 classic `<script>` 批量 bundle，
+  esbuild `--format=esm` + `--external:react` 会留下裸 `import * as React`，
+  整批 12.9MB 脚本 SyntaxError → 浏览器报 `Failed to load plugins`（`client-modules:
+  bundle script … failed to load`）。正确做法：esbuild 打 CJS 后手工包一层
+  `window.__ModuleLoader__.load({ id, factory: (require) => { …return module.exports } })`
+  （与官方/第三方插件 lib/client.js 格式一致）。
+
 - **一条插件只能有一条注册路径**：要么 profile `package.json` 的
   `dsh.profile.bundles`，要么 `cordis.patch.yml` 手动 `insert`，**绝不能两者都做**
   → 否则启动即崩：`duplicate loader entry id: <id>`。
