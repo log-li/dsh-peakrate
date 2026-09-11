@@ -107,49 +107,115 @@ function normalizedWindows(schedule: Schedule): { start: number; end: number }[]
 /**
  * 计算从「当天的第 minutes 分钟」出发，到下一个状态翻转点还有多久。
  *
- * 翻转点只可能出现在：某个窗口的 start（谷→峰）或 end（峰→谷）。
- * 逐日向后扫描（最多 8 天，足以覆盖任意 peakDays 组合）以保证跨日、
- * 跨周末都正确。
+ * **关键语义（2026-09-12 修正）**：窗口边界**不等于**状态翻转点。
+ * 一个边界是否翻转，取决于「边界两侧是否处于不同状态」：
+ * - 相邻窗口 `[09:00-12:00, 12:00-18:00]` 在 12:00 处两侧都是 peak → **不是翻转点**；
+ * - 跨午夜窗口 `22:00-02:00` 在次日 01:00 时，当前仍处于该窗口内，
+ *   真正的翻转点是 **02:00**（窗口结束），而不是次日 22:00（下一次开始）。
  *
- * **DST 处理**：不能简单用 `dayOffset * 1440` 累加——夏令时切换当天只有
- * 1380 或 1500 分钟，那样算出的倒计时会整整差一小时。这里改为：先用
- * 墙上时间定位「翻转点所在的墙上时刻」，再用真实时间戳求差值，从而在
- * 任意时区、任意 DST 切换日都得到正确的实际等待时长。
+ * 因此这里不再枚举「边界」，而是**直接向后搜索第一个状态发生变化的最早墙上时刻**：
+ * 以分钟为粒度推进候选点，用 `isPeakAt` 判定两侧状态，取第一个不同者。
+ *
+ * **DST 处理**：不按 `dayOffset * 1440` 累加（夏令时切换日只有 1380/1500 分钟），
+ * 而是把墙上坐标解析为真实时间戳后再求差（见 `wallClockToTimestamp`）。
  */
 function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minutes: number): number {
   const windows = normalizedWindows(schedule)
   if (windows.length === 0) return Number.POSITIVE_INFINITY
 
-  // 翻转点在「第几天 + 当天第几分钟」的墙上坐标。
-  type WallPoint = { dayOffset: number; minuteOfDay: number }
+  const currentState = isPeakAt(schedule, windows, weekday, minutes)
 
-  const found: WallPoint[] = []
-  for (let dayOffset = 0; dayOffset <= 8; dayOffset++) {
-    const day = (weekday + dayOffset) % 7
-    if (!isPeakDay(schedule, day)) continue
+  // 只在「候选时刻」上判定状态变化即可——相邻候选之间的状态恒定。
+  //
+  // 候选一律以「距基准日 00:00 的绝对分钟数」表示，再拆成 (dayOffset, minuteOfDay)。
+  // **不要**用窗口自己的 extraDay 去加天数：跨午夜窗口的 end 相对「窗口起点日」
+  // 是 +1 天，但相对「基准日」可能仍是当天（当窗口起点日就是基准日时），
+  // 直接相加会把翻转点整整推后一天（实测：周二 01:00 的倒计时被算成 1500min
+  // 而非正确的 60min）。
+  // 候选点同时记录「绝对分钟」与「用于判定状态的星期/当天分钟」。
+  // 这两者**不能**由同一个数推出来：跨午夜窗口 22:00-02:00 的 end 绝对落点是
+  // 次日 02:00，但判定该点状态时要问的是「窗口所属日（即前一天）是否 peakDay」，
+  // 而 isPeakAt 内部已按「前一天溢出」规则处理，因此这里只需传入**实际落点**的
+  // 星期与当天分钟即可（00:00 与 02:00 都在溢出段内，结果一致）。
+  type WallPoint = { absolute: number; dayOffset: number; minuteOfDay: number }
+  const points: WallPoint[] = []
+  const pushAbs = (absolute: number): void => {
+    if (absolute < 0) return
+    points.push({
+      absolute,
+      dayOffset: Math.floor(absolute / 1440),
+      minuteOfDay: absolute % 1440,
+    })
+  }
+  // 遍历「窗口所属日」，把该日所有窗口的 start/end 以其绝对分钟加入候选。
+  // 跨午夜窗口的 end 已归一化为 > 1440（如 22:00-02:00 → end=1560），
+  // 加到 dayOffset*1440 上自然落到次日，无需额外 +1 天。
+  for (let dayOffset = 0; dayOffset <= 9; dayOffset++) {
+    pushAbs(dayOffset * 1440) // 每天 00:00：前一天的跨午夜段可能在此结束
     for (const w of windows) {
-      for (const c of [w.start, w.end]) {
-        // 跨午夜的窗口 end 会 > 1440，归属到「次日」
-        const extraDay = Math.floor(c / 1440)
-        const minuteOfDay = c % 1440
-        // 只有当该墙上时刻确实晚于「现在」，才可能是下一个翻转点
-        if (dayOffset * 1440 + c > minutes) {
-          found.push({ dayOffset: dayOffset + extraDay, minuteOfDay })
-        }
-      }
+      // 窗口起点（当天）
+      pushAbs(dayOffset * 1440 + w.start)
+      // 窗口终点：跨午夜时 end > 1440，其「当天 02:00」形式同样要加入候选。
+      // 例：22:00-02:00 且基准日即窗口所属日时，真正的翻转点是**当天** 02:00
+      // （绝对 120），而 dayOffset*1440+1560 = 1560 只会得到次日 02:00。
+      // 两者都要进候选，由 isPeakAt 判定哪个才是真正的状态变化点。
+      pushAbs(dayOffset * 1440 + (w.end % 1440))
+      pushAbs(dayOffset * 1440 + w.end)
     }
   }
-  if (found.length === 0) return Number.POSITIVE_INFINITY
+  points.sort((a, b) => a.absolute - b.absolute)
 
-  // 把墙上坐标转成真实时间戳，取最早的一个，再用真实毫秒差求分钟数。
-  let best = Number.POSITIVE_INFINITY
-  for (const p of found) {
+  // 找到第一个「状态与当前不同」的候选时刻。
+  for (const p of points) {
+    // 未来性判定：候选的绝对分钟数须晚于「现在」（今天是 0 基准）。
+    if (p.absolute <= minutes) continue
+    const dayAt = (weekday + p.dayOffset) % 7
+    const stateAfter = isPeakAt(schedule, windows, dayAt, p.minuteOfDay)
+    if (stateAfter === currentState) continue
+
     const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
     if (ts === undefined) continue
     const deltaMs = ts - now.getTime()
-    if (deltaMs > 0 && deltaMs < best) best = deltaMs
+    if (deltaMs > 0) return Math.round(deltaMs / 60000)
   }
-  return Number.isFinite(best) ? Math.round(best / 60000) : Number.POSITIVE_INFINITY
+  return Number.POSITIVE_INFINITY
+}
+
+/**
+ * 判定「某天的第 minutes 分钟」是否处于峰时（窗口内），考虑跨午夜窗口。
+ *
+ * 语义（2026-09-12 修正）：状态必须**沿真实时间连续**——跨午夜窗口
+ * `22:00-02:00` 在 00:00 处不应发生状态跳变（那只是日期翻页，不是窗口边界）。
+ * 因此：
+ * - 当天窗口：`start <= minutes < end`（end 已归一化，跨午夜时 > 1440）
+ * - **前一天的溢出**：若前一天在 peakDays 且有跨午夜窗口，则其次日溢出段
+ *   `[0, end - 1440)` 也属于峰时。
+ *
+ * @param schedule - 时段规则。
+ * @param windows - 已归一化的窗口（end 跨午夜时 > 1440）。
+ * @param weekday - 该天的星期。
+ * @param minutes - 当天第几分钟。
+ */
+function isPeakAt(
+  schedule: Schedule,
+  windows: { start: number; end: number }[],
+  weekday: number,
+  minutes: number,
+): boolean {
+  // 前一天的跨午夜窗口溢出到今天的部分（今天 00:00 起）
+  const prevDay = (weekday + 6) % 7
+  if (isPeakDay(schedule, prevDay)) {
+    for (const w of windows) {
+      if (w.end > 1440 && minutes < w.end - 1440) return true
+    }
+  }
+  // 今天自己的窗口
+  if (isPeakDay(schedule, weekday)) {
+    for (const w of windows) {
+      if (minutes >= w.start && minutes < w.end) return true
+    }
+  }
+  return false
 }
 
 /**
@@ -238,7 +304,9 @@ function tzOffsetMs(timeZone: string, at: Date): number {
  */
 export function currentPeriod(schedule: Schedule, now: Date): PeriodResult {
   const { weekday, minutes } = wallClock(now, schedule.timeZone)
-  const peak = isPeakDay(schedule, weekday) && inPeakWindow(schedule, minutes)
+  // 与 minutesUntilFlip 共用同一判定函数，保证「时段」与「倒计时」语义一致
+  // （两者若各算各的，跨午夜窗口处会出现「说自己是 peak 却倒计时到明天」的矛盾）。
+  const peak = isPeakAt(schedule, normalizedWindows(schedule), weekday, minutes)
   const period: Period = peak ? 'peak' : 'offPeak'
   const minutesUntilSwitch = minutesUntilFlip(schedule, now, weekday, minutes)
   return { period, minutesUntilSwitch }

@@ -3,7 +3,10 @@
  *
  * 覆盖 spec §10 要求的五类边界 + UTC / Asia/Shanghai 双时区判定。
  */
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { parseCatalog } from '../src/catalog.js'
 import { currentPeriod, formatCountdown, type Schedule } from '../src/schedule.js'
 
 /** 数据源里的 ollama-deepseek-v4：UTC 周一–五 12:00-18:00。 */
@@ -274,6 +277,95 @@ describe('★ 穷举：8 天扫描上界对任意 peakDays 子集都充分', () 
           if (!Number.isFinite(currentPeriod(schedule, t).minutesUntilSwitch)) {
             bad.push(`${peakDays.join('/')} @ ${t.toISOString()}`)
           }
+        }
+      }
+    }
+    expect(bad).toEqual([])
+  })
+})
+
+describe('★ 回归：窗口边界 ≠ 状态翻转点', () => {
+  /** 真值：逐分钟向前找第一个时段翻转点。 */
+  function groundTruth(schedule: Schedule, now: Date): number {
+    const start = currentPeriod(schedule, now).period
+    // 最大真实翻转间隔约 7 天（如仅周一峰时、周日后半夜起算），8 天足够
+    for (let i = 1; i <= 60 * 24 * 8; i++) {
+      if (currentPeriod(schedule, new Date(now.getTime() + i * 60_000)).period !== start) return i
+    }
+    return Number.POSITIVE_INFINITY
+  }
+
+  it('相邻窗口 [09:00-12:00, 12:00-18:00] 在 12:00 处不翻转', () => {
+    // 12:00 两侧都是 peak，真正的翻转点是 18:00。
+    // 修复前：10:00 误报 120min（指向 12:00），实际应 480min。
+    const adjacent: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [1],
+      peakWindows: [
+        { start: '09:00', end: '12:00' },
+        { start: '12:00', end: '18:00' },
+      ],
+    }
+    for (const h of [10, 12, 13, 17]) {
+      const now = new Date(Date.UTC(2026, 8, 14, h, 0)) // 周一
+      expect(currentPeriod(adjacent, now).minutesUntilSwitch, `${h}:00`).toBe(
+        groundTruth(adjacent, now),
+      )
+    }
+    // 明确断言修复前会错的那个点
+    expect(currentPeriod(adjacent, new Date(Date.UTC(2026, 8, 14, 10, 0))).minutesUntilSwitch).toBe(
+      480,
+    )
+  })
+
+  it('跨午夜窗口 22:00-02:00：次日 01:00 的翻转点是 02:00，不是次日 22:00', () => {
+    // 修复前：周二 01:00 误报 1260min（指向次日 22:00），实际应 60min。
+    const spill: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [1, 2],
+      peakWindows: [{ start: '22:00', end: '02:00' }],
+    }
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 15, 1, 0))).period).toBe('peak')
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 15, 1, 0))).minutesUntilSwitch).toBe(60)
+
+    for (const [d, h] of [[14, 23], [15, 1], [15, 2], [15, 12]] as const) {
+      const now = new Date(Date.UTC(2026, 8, d, h, 0))
+      expect(currentPeriod(spill, now).minutesUntilSwitch, `09-${d} ${h}:00`).toBe(
+        groundTruth(spill, now),
+      )
+    }
+  })
+
+  it('状态沿真实时间连续：跨午夜窗口在 00:00 处不跳变', () => {
+    // 00:00 只是日期翻页，不是窗口边界——状态必须连续。
+    const spill: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [1, 2],
+      peakWindows: [{ start: '22:00', end: '02:00' }],
+    }
+    // 周一 23:59 与周二 00:01 应同为 peak
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 14, 23, 59))).period).toBe('peak')
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 15, 0, 1))).period).toBe('peak')
+    // 周二 01:59 仍 peak，02:01 转 offPeak
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 15, 1, 59))).period).toBe('peak')
+    expect(currentPeriod(spill, new Date(Date.UTC(2026, 8, 15, 2, 1))).period).toBe('offPeak')
+  })
+
+  it('真实数据源的全部 profile × 一周逐小时，倒计时均与真值一致', () => {
+    // 端到端护栏：把真实快照里每个 profile 都过一遍
+    const snapshot = JSON.parse(
+      readFileSync(fileURLToPath(new URL('../data/pricing.json', import.meta.url)), 'utf8'),
+    )
+    const parsed = parseCatalog(snapshot)
+    expect(parsed).toBeDefined()
+    const bad: string[] = []
+    for (const p of parsed!.profiles) {
+      for (let d = 0; d < 4; d++) {
+        for (let h = 0; h < 24; h += 6) {
+          const now = new Date(Date.UTC(2026, 8, 14 + d, h, 0))
+          const got = currentPeriod(p.schedule, now).minutesUntilSwitch
+          const want = groundTruth(p.schedule, now)
+          if (got !== want) bad.push(`${p.id} @ ${now.toISOString()} got=${got} want=${want}`)
         }
       }
     }
