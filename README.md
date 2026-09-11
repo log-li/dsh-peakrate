@@ -46,9 +46,10 @@ Ollama
 **三种时段态**：峰 `2×` / 谷 `1×` / **活动**（限时促销，如 Z.ai GLM-5.3-Flash 的
 「ZCode 不计额度 · 其他 agent 半价」，带日期区间）。活动窗口优先于常规峰谷。
 
-## 覆盖面板（设置 → 模型 页脚）
+## 配置卡片（设置 → 插件）
 
-**设置 → 模型** 页面底部有一个**可展开**的「模型峰谷倍率」栏（默认收起，不占独立标签页）：
+**设置 → 插件 → 插件配置** 里有一张**可展开**的「模型峰谷倍率」卡片
+（与官方那几张配置卡片并列，默认收起）：
 
 - **当前覆盖情况**（实时）：逐 provider 列出模型、当前倍率、命中哪个 profile；
   未收录的明确标「未收录」；
@@ -56,6 +57,9 @@ Ollama
   （同一 provider 下混有非峰谷计价的模型属正常，不会告警）；
 - **匹配规则**：内置 provider 映射表 + 有意不映射的 provider 及理由；
 - **如何自定义**：`providerAliases` / `modelMappings` 的配置示例。
+
+此外 `enabled`（总开关）与 `refreshIntervalHours`（后台刷新间隔）**可直接在界面里编辑**，
+写入 `~/.dsh/settings.yaml` 的 `peakrate` 段；其余配置仍在 `cordis.patch.yml`。
 
 已在覆盖内的 provider：`deepseek-official`、`ollama`、`xiaomi-token-plan-cn`、
 `ocg` / `ocg-1` / `opencode-go`（OpenCode Go 与 DeepSeek 官方窗口一致）、

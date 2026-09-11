@@ -245,20 +245,38 @@ composer 工具行左侧（紧邻模型选择器），用**自己的 id** 做纯
 完整目标态（`Xh 后切换，转为 <时段名>（<徽章>）`）放在 tooltip 里。
 - 每 30 秒重算一次，保证倒计时新鲜
 
-### 5.4 设置页嵌入（`settings.models.footer`，追加式、可展开）
+### 5.4 插件配置卡片（`settings.plugin.item`，追加式、可展开）
 
-**2026-09-12 修订**：原先注册为独立的 `settings.section` 标签页；用户要求
-**不要单独占一个标签页**，而是嵌进官方「设置 → 模型」页作为**可展开的一栏**。
+**2026-09-12 最终方案**：面板呈现为**「设置 → 插件 → 插件配置」里的可展开卡片**，
+与官方那几张（终端 / Agent 循环 / Subagent / 网页搜索）并列。
 
-现注册到 **`settings.models.footer`**（list · `replaceRisk: none` · 该槽位在无注册者时
-不渲染任何内容），自有 `id: 'peakrate'` → **纯追加**。折叠态只显示一行标题
-（含覆盖摘要），展开后显示完整内容：
+**关键约束（实测确认）**：该页签的卡片**只在其 `key` 属于 Host 提供的 settings
+命名空间时才渲染**：
 
-1. **当前覆盖情况（实时）**：`useSessions` 取当前会话 → 读共享模型目录 →
-   逐 provider 列出「模型 / 当前倍率 / 命中 profile」；未收录的标「未收录」。
-   整组零命中且无已知理由者，顶部告警高亮。
-2. **匹配规则**：内置别名表 + 有意不映射的 provider 及理由。
-3. **如何自定义**：`providerAliases` / `modelMappings` 的 config 片段。
+```js
+// dsh-client-ui-settings-plugins 的 publish()
+const served = new Set(mirror.namespaces.map(v => v.ns))
+const namespaces = entries.filter(e => served.has(e.options.key))
+```
+
+而**光在 settings.yaml 加一个顶层 key 不会被 serve**（已实测：卡片不渲染）。
+必须在 **host 半边**声明：
+
+```js
+ctx.inject(['settings'], (c) => {
+  c.settings.installSection(ctx, 'peakrate', SCHEMA, entry, { setSource, onChange })
+})
+```
+
+（范例：`dsh-tool-subagent/lib/model-selection-settings.js`）schema 用
+`@deepseek-ai/schemastery`（DSH 共享包 → 作 **peerDependency**）。
+
+**额外收益**：插件的配置项因此可在界面里编辑。当前只暴露 host 侧**能即时生效**的两项
+（`enabled` / `refreshIntervalHours`）；别名/映射/自定义 profile 结构复杂且需重建快照，
+仍留在 `cordis.patch.yml`。
+
+> 曾先后试过 `settings.section`（独立标签页）与 `settings.models.footer`（模型页页脚），
+> 均按用户反馈废弃：前者「不要单独占一个标签页」，后者不是「官方插件页」。
 
 ### 5.3 功能取舍（诚实记录）
 

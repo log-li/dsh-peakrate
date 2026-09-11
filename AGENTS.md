@@ -5,7 +5,8 @@ DSH 生态插件：显示模型的峰谷倍率与切换倒计时，三处呈现�
 1. **composer 工具行**（追加式，`conversation.input.left`）——免开菜单即见当前模型倍率；
 2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷，
    选型时可直接比价；
-3. **设置 → 模型 页脚**（追加式，`settings.models.footer`）——可展开的实时覆盖面板 + 规则说明。
+3. **设置 → 插件 → 插件配置 卡片**（追加式，`settings.plugin.item`）——可展开的实时覆盖面板
+   + 规则说明；并让插件的 `enabled` / `refreshIntervalHours` 可在界面里编辑。
 
 第 2 项是**有意遮蔽**自带 UI，必须遵守「**功能超集**」纪律（见下方槽位坑）。
 
@@ -47,7 +48,7 @@ dsh-peakrate/
 │   └── client/
 │       ├── index.tsx     # 注册三处 + locale 文案
 │       ├── ModelSelect.tsx    # fork 官方选择器（功能超集）+ 每行倍率徽章
-│       ├── SettingsSection.tsx # 嵌入官方「设置→模型」页脚的可展开覆盖面板
+│       ├── SettingsSection.tsx # 「设置→插件」里的可展开配置卡片
 │       ├── rate.ts       # 倍率判定共享层
 │       ├── icons.tsx     # DSH 风格单色描边 SVG 图标
 │       └── style.css     # 仅用 --dsw-* 设计 token
@@ -149,6 +150,15 @@ dsh-peakrate/
     无则进 `UNMATCHED_BY_DESIGN` 写理由。
   - 交付前跑「覆盖穷举」审计（见下方验证节）。
 
+- **★ `settings.plugin.item` 的 key 必须是 Host 提供的 settings 命名空间**
+  （2026-09-12 实测）：该页签只渲染 key ∈ `settings.describe().namespaces` 的卡片
+  （见 dsh-client-ui-settings-plugins 的 `publish()`）。
+  **光在 settings.yaml 加一个顶层 key 不会被 serve** —— 必须在 **host 半边**
+  调 `ctx.inject(['settings'], c => c.settings.installSection(ctx, ns, schema, entry, hooks))`
+  声明命名空间（范例 `dsh-tool-subagent/lib/model-selection-settings.js`），
+  schema 用 `@deepseek-ai/schemastery`（共享包 → peerDependency）。
+  收益不止「卡片能渲染」：**插件的配置项由此变成界面可编辑**。
+
 - **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
   哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
   **只传 `id` 会注册失败**。写法对照真实产物：
@@ -242,7 +252,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 2. 菜单内每行显示倍率；未匹配的模型（如 kimi-k3）**什么都不显示**
 3. composer 工具行的当前模型徽章仍在（与菜单呈现互补）
 4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
-5. **设置 → 模型** 页脚出现「模型峰谷倍率」折叠栏，展开后覆盖表正常且**无 ⚠ 告警**
+5. **设置 → 插件 → 插件配置** 出现「模型峰谷倍率」卡片，展开后覆盖表正常且**无 ⚠ 告警**
 
 ## 提交门禁
 

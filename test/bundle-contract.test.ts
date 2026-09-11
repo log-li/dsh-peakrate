@@ -182,23 +182,22 @@ describe('★ 回归：绝不【意外】注册到会遮蔽自带 UI 的槽位',
     }
   })
 
-  it('注册三处：工具行徽章、模型选择器（有意接管）、模型页页脚（追加）', () => {
+  it('注册三处：工具行徽章、模型选择器（有意接管）、插件配置卡片', () => {
     const regs = captureRegistration()
     expect(regs.map((r) => r.slot).sort()).toEqual([
       'conversation.input.left',
       'conversation.input.model',
-      'settings.models.footer',
+      'settings.plugin.item',
     ])
   })
 
-  it('覆盖面板用自有 id 注册到 settings.models.footer（纯追加，不占标签页）', () => {
+  it('覆盖面板注册到 settings.plugin.item，key = 自有 settings 命名空间', () => {
     const regs = captureRegistration()
-    const settings = regs.find((r) => r.slot === 'settings.models.footer')
-    expect(settings, '缺少覆盖面板注册').toBeDefined()
-    expect(settings?.options.id).toBe('peakrate')
-    expect(settings?.options.name).toBe('settings.models.footer')
-    // label 必须是 thunk —— 语言切换后自动跟随，无需重新注册
-    expect(typeof settings?.options.label).toBe('function')
+    const card = regs.find((r) => r.slot === 'settings.plugin.item')
+    expect(card, '缺少插件卡片注册').toBeDefined()
+    expect(card?.options.name).toBe('settings.plugin.item')
+    // keyed 槽位：key 必须等于 Host 提供的 settings 命名空间，否则不渲染
+    expect(card?.options.key).toBe('peakrate')
   })
 
   it('同时传 name（槽位键）与 id（自有 cell 键）—— 只给 id 无法注册', () => {

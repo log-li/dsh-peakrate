@@ -355,27 +355,7 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ② 嵌入官方「设置 → 模型」页的页脚（list · replaceRisk: none → 自有 id 纯追加）。
-    //    用户要求不要单独占一个标签页，而是并进官方页作为可展开的一栏。
-    slots.inject('settings.models.footer', () =>
-      slots.register(
-        {
-          name: 'settings.models.footer',
-          id: 'peakrate',
-          order: 10,
-          // label 是 thunk：每次投影重读，语言切换后自动跟随
-          label: () => t('settings.title'),
-          inject: () => ({
-            peakrate: DEFAULT_FACE,
-            modelDirectories: models,
-            t,
-          }),
-        },
-        PeakrateSettings,
-      ),
-    )
-
-    // ③ 插件卡片：出现在「设置 → 插件 → 插件配置」。
+    // ② 插件卡片：出现在「设置 → 插件 → 插件配置」。
     //    keyed 槽位按 **Host 提供的 settings 命名空间** 派发 key，因此 key 必须是
     //    我们自己的命名空间名（`peakrate`，在 settings.yaml 里）。
     slots.inject('settings.plugin.item', () =>
@@ -393,7 +373,7 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ④ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
+    // ③ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
     slots.inject('conversation.input.model', () =>
       slots.register(
         {

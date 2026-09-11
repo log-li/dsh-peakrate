@@ -9,6 +9,7 @@ import { readFileSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { parseCatalog, type ParsedCatalog } from './catalog.js'
 import type { MatchConfig, RateProfile } from './matching.js'
 
@@ -32,6 +33,28 @@ export interface Config {
 
 const DEFAULT_CATALOG_URL = 'https://offpeakclock.com/pricing.json'
 const DEFAULT_REFRESH_HOURS = 24
+
+/**
+ * 本插件在**用户设置**里的命名空间。
+ *
+ * 它同时解决两件事：
+ * 1. **「设置 → 插件 → 插件配置」里的卡片**：该页签按 Host 提供的 settings
+ *    命名空间派发 slot key，没有命名空间 → 客户端卡片注册了也**不会渲染**
+ *    （实测确认：光在 settings.yaml 加一个顶层 key 不被 serve，必须
+ *    `settings.installSection(...)`）。
+ * 2. **配置可在界面里编辑**：不必再手改 `cordis.patch.yml`。
+ *
+ * 只暴露 host 侧**能真正生效**的项；别名/映射等复杂结构仍留在 loader config。
+ */
+const SETTINGS_NAMESPACE = 'peakrate'
+
+/** 暴露给设置 UI 的 schema —— 两项都 host 侧可即时生效。 */
+const SETTINGS_SCHEMA = z.object({
+  /** 总开关；关闭后不再后台刷新（客户端呈现暂不受其影响）。 */
+  enabled: z.boolean().default(true),
+  /** 后台刷新间隔（小时）；0 = 不自动刷新。 */
+  refreshIntervalHours: z.number().default(DEFAULT_REFRESH_HOURS),
+})
 
 /** 内置快照路径（随包分发，安装即用、离线可用）。 */
 function snapshotPath(): string {
@@ -225,6 +248,19 @@ export class CatalogStore {
     }
   }
 
+  /**
+   * 改后台刷新间隔并立即生效（0 = 停止自动刷新）。
+   *
+   * 供用户设置里修改 `refreshIntervalHours` 时调用。
+   *
+   * @param hours - 新间隔（小时）。
+   */
+  setRefreshInterval(hours: number): void {
+    this.stopAutoRefresh()
+    this.config.refreshIntervalHours = hours
+    this.startAutoRefresh()
+  }
+
   /** 启动后台刷新（refreshIntervalHours = 0 时不启动）。 */
   startAutoRefresh(): void {
     const hours = this.config.refreshIntervalHours ?? DEFAULT_REFRESH_HOURS
@@ -284,6 +320,56 @@ export function apply(ctx: Context, config: Config = {}): void {
 
   // 启动后异步拉一次，不阻塞启动
   void store.refresh()
+
+  // 声明用户设置命名空间：既让「设置 → 插件」的卡片得以渲染，
+  // 也让这两项配置可在界面里编辑。
+  let live = {
+    enabled: config.enabled ?? true,
+    refreshIntervalHours: config.refreshIntervalHours ?? DEFAULT_REFRESH_HOURS,
+  }
+  /**
+   * 把最新设置应用到运行中的 store。
+   *
+   * 只处理**真正能即时生效**的两项：开关与刷新间隔。其余配置（别名/映射/
+   * 自定义 profile）结构复杂且需重建快照，仍留在 `cordis.patch.yml`。
+   */
+  const applySettings = (next: typeof live): void => {
+    const enabledChanged = next.enabled !== live.enabled
+    const intervalChanged = next.refreshIntervalHours !== live.refreshIntervalHours
+    live = next
+    if (!enabledChanged && !intervalChanged) return
+
+    if (!next.enabled) {
+      store.stopAutoRefresh()
+      logger?.info?.('[peakrate] 已按用户设置停用后台刷新')
+      return
+    }
+    store.setRefreshInterval(next.refreshIntervalHours)
+    logger?.info?.(`[peakrate] 后台刷新间隔已更新为 ${next.refreshIntervalHours} 小时`)
+  }
+
+  ctx.inject(['settings'], (settingsCtx: Context) => {
+    const settings = (settingsCtx as unknown as { settings?: {
+      installSection: (
+        owner: Context,
+        ns: string,
+        schema: unknown,
+        entry: Record<string, unknown>,
+        hooks: {
+          setSource: (source: () => Record<string, unknown>) => void
+          onChange: () => void
+        },
+      ) => void
+    } }).settings
+    if (settings === undefined) return
+    settings.installSection(ctx, SETTINGS_NAMESPACE, SETTINGS_SCHEMA, live, {
+      setSource: (source) => {
+        const next = source() as typeof live
+        applySettings(next)
+      },
+      onChange: () => {},
+    })
+  })
 }
 
 export const name = 'dsh-peakrate'
