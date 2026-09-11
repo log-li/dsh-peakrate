@@ -1,6 +1,6 @@
 # dsh-peakrate — 模型选择器内的峰谷倍率指示插件
 
-Status: proposed（阶段 1–4 已实现，待实机验收）
+Status: implemented（已装机 web profile，实机验证通过 2026-09-12）
 创建于: 2026-09-11
 最近更新: 2026-09-12
 包名: `dsh-peakrate`
@@ -308,6 +308,22 @@ dsh-peakrate/
 ## 13. 变更历史
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
+
+### 2026-09-12 — 实机验证通过并装入 web profile
+
+- **最终验证**（线上 3080 实例，Playwright 无头浏览器实测）：
+  - 徽章渲染正常：`🌙1× · 2d 11h`，hover 详情完整；
+  - **自带模型选择器完好**：菜单展开、按 provider 分组列出全部模型、当前项带 ✓；
+  - **控制台错误：0**。
+- **实际呈现位置**：composer 卡片的**工具行**（输入框下方那一行）靠左，
+  形如 `+ @ 请求批准 ⌄  🌙1× · 2d 11h  ……  DeepSeek-V41-Flash High ↑`。
+  **不在模型选择器下拉列表内**——那是刻意取舍（见 §5.3）。
+- **状态**：`Status: implemented`。已装入 `~/.dsh/profiles/web`
+  （dependencies + `dsh.profile.bundles` 各一条 + node_modules 软链），
+  单注册路径，无 `duplicate loader entry id` 风险。
+- **待办（可选增强）**：若希望「选模型时能看到各模型的倍率」，可加
+  `conversation.input.overlay`（同为 `replaceRisk: none`）做一个可展开面板，
+  列出全部匹配模型的倍率——**仍不替换选择器**。
 
 ### 2026-09-12 — 隔离实例实机验证：捕获 `remote.session` 运行时报错
 
