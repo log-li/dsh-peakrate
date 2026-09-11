@@ -18,8 +18,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: https://registry.npmjs.org
           cache: npm
+        # ⚠ **不要**设 `registry-url`：设了 setup-node 会写出一个含
+        # `_authToken=${NODE_AUTH_TOKEN}` 的 .npmrc 并导出占位 NODE_AUTH_TOKEN，
+        # 而 npm **优先用该 token 而不是走 OIDC** → 表现为
+        # `E404 Not Found - PUT https://registry.npmjs.org/<pkg>`（2026-09-12 实测，
+        # provenance 已签署成功却仍 404）。参见 npm/cli#8730、actions/setup-node#1477。
 
       # Unlike plugins that peer-depend on host-private packages, this one only
       # peers on publicly published @deepseek-ai packages (cordis, schemastery)
