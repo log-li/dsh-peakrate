@@ -1,7 +1,7 @@
 # AGENTS.md — dsh-peakrate
 
-DSH 生态插件：在**模型选择器**里为匹配到的模型显示**当前时段倍率**（峰/谷），
-当前选中模型额外显示**切换倒计时**，hover 看精简详情。
+DSH 生态插件：在 **composer 工具行左侧**显示**当前模型**的峰谷倍率与切换倒计时，
+hover 看精简详情。**不替换任何自带 UI**（见下方槽位坑）。
 
 **设计真相见 spec**：`.plans/spec/dsh-peakrate-spec.md ` —— 改行为前先读它，
 改行为后先更新它（全局「Spec 先行规则」）。
@@ -11,7 +11,7 @@ DSH 生态插件：在**模型选择器**里为匹配到的模型显示**当前�
 DSH bundle 插件 + client 半边，加入 profile 的 `dsh.profile.bundles` 即生效：
 
 - `dsh.bundle.patch: ./cordis.patch.yml`（host 侧挂载自身）
-- `dsh.client.platform: web`（client 侧替换模型选择器）
+- `dsh.client.platform: web`（client 侧**追加**到 `conversation.input.left`）
 
 ## 硬约束（违反即偏离 spec）
 
@@ -35,7 +35,7 @@ dsh-peakrate/
 │   ├── schedule.ts       # 纯函数：currentPeriod / minutesUntilSwitch（可单测）
 │   ├── matching.ts       # 纯函数：provider 别名 + 模型归一化 → profile（可单测）
 │   └── client/
-│       ├── index.tsx     # 替换模型选择器，渲染行内徽章 / 倒计时 / hover 详情
+│       ├── index.tsx     # 追加到 conversation.input.left，渲染当前模型徽章/倒计时
 │       └── style.css     # 仅用 --dsw-* 设计 token
 └── test/                 # 纯函数单测 + 匹配表快照测试
 ```
@@ -67,6 +67,25 @@ dsh-peakrate/
   插件加载成功、host 正常、单测全绿，但组件读到的数据恒为空 → **UI 一个徽章都不显示**。
   回归测试见 `test/bundle-contract.test.ts`（从构建产物验证，而非直接喂纯函数）。
 
+- **★ 绝不注册到 `replaceRisk: shadows-shipped-ui` 的槽位**（2026-09-12 事故）：
+  这类槽位注册即**遮蔽官方实现**。本插件曾注册到 `conversation.input.model`
+  （single + shadows-shipped-ui）做「替换选择器」，替换实现残缺 →
+  **用户无法切换模型**。教训：**「槽位允许替换」≠「应该替换」**；
+  用残缺实现接管核心交互入口，是把测试风险转嫁给用户的日常工具。
+  - **正确做法**：注册到 `replaceRisk: none` 的 **list** 槽位做纯追加。
+    本插件用 `conversation.input.left`（composer 工具行左侧）。
+  - **查槽位安全性**：Client Slots Inspect `listSubTree` 会给出每个槽位的
+    `kind` / `replaceRisk`。`single` + `shadows-shipped-ui` = 危险；
+    `list` + `none` = 安全（可追加）。
+  - **守卫测试**：`test/bundle-contract.test.ts` 维护 `SHADOWING_SLOTS` 清单并断言
+    绝不注册其中任何一个。**改 slot 必跑它**。
+
+- **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
+  哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
+  **只传 `id` 会注册失败**。写法对照真实产物：
+  `slots.inject('settings.section', () => slots.register({ name: 'settings.section', id: 'memory', order: 100 }, C))`
+  （见 dsh-plugin-memory / dsh-mcp-manager / dshmarket 的 `lib/client.js`）。
+
 - **一条插件只能有一条注册路径**：要么 profile `package.json` 的
   `dsh.profile.bundles`，要么 `cordis.patch.yml` 手动 `insert`，**绝不能两者都做**
   → 否则启动即崩：`duplicate loader entry id: <id>`。
@@ -85,12 +104,20 @@ dsh-peakrate/
 - `matching.ts`：别名命中/未命中、`:` 后缀剥离、V4 系宽松归属、无匹配返回空、
   config 覆盖优先级
 
-**实机验收**（装进 web profile 后开新会话）——见 spec §10，其中两条是核心证据：
+**构建产物契约**（`test/bundle-contract.test.ts`，从 `lib/client.js` 验证）：
 
-1. `ollama`（**UTC**）与 `deepseek-official`（**北京时**）的倒计时**各自正确**
-   ——同一模型不同 provider 时段规则不同，这是本插件区别于现有 DeepSeek 专用插件的价值所在
-2. **E2E 审计**：通读模型选择器**完整渲染输出**（不只检查字段），确认无重复、
-   无错位、无残留占位；未匹配的模型必须**什么都不显示**
+- 产物是 `__ModuleLoader__` 包裹的 CJS、可被 classic script 解析
+- **绝不注册到 `SHADOWING_SLOTS` 中的任何槽位**（含 `conversation.input.model`）
+- 注册到 `conversation.input.left`，且**同时**传 `name`（槽位键）与 `id`（自有 cell 键）
+- 注入面能给出非空 profiles，端到端能算出正确判定
+
+**实机验收**（装进 web profile 后开新会话）——见 spec §10：
+
+1. **确认自带模型选择器仍可用**（最高优先级——上一版就是在这里翻车的）
+2. composer 工具行左侧出现当前模型的徽章；`ollama`（UTC）与 `deepseek-official`
+   （北京时）的倒计时**各自正确**——同一模型不同 provider 时段规则不同，这是本插件
+   区别于 DeepSeek 专用插件的价值所在
+3. 未匹配的模型（如 kimi-k3）**什么都不显示**
 
 ## 提交门禁
 
