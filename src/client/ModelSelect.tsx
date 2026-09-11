@@ -545,7 +545,12 @@ function RateChip({ state }: { state: RateState | undefined }): React.ReactEleme
       <RateIcon period={state.period} size={13} />
       {state.badge}
       {formatCountdown(countdown) === '' ? null : (
-        <span className="dsh-peakrate-ms-rateCountdown">{` · ${formatCountdown(countdown)}`}</span>
+        <span className="dsh-peakrate-ms-rateCountdown">
+          {` · ${formatCountdown(countdown)}`}
+          {state.trend === undefined ? null : (
+            <span className="dsh-peakrate-ms-rateTrend">{state.trend === 'up' ? ' ↑' : ' ↓'}</span>
+          )}
+        </span>
       )}
     </span>
   )

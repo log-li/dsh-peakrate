@@ -226,3 +226,13 @@
 .dsh-peakrate-settings-body {
   padding: 4px 2px 8px;
 }
+
+/* 涨跌方向箭头：↑ 之后变贵、↓ 之后变便宜 */
+.dsh-peakrate-ms-rateTrend {
+  color: var(--dsw-alias-label-dimmed);
+}
+
+/* 菜单再宽一点，容纳「倍率 + 倒计时 + 方向」而不裁切 */
+.dsh-peakrate-ms-menu {
+  max-width: min(480px, 100vw - 32px);
+}

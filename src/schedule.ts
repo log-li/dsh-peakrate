@@ -45,6 +45,14 @@ export interface PeriodResult {
   period: Period
   /** 距下一个状态翻转点的分钟数；总是 > 0。 */
   minutesUntilSwitch: number
+  /**
+   * 翻转后的状态 —— 让调用方能回答「之后是变贵还是变便宜」。
+   *
+   * 单看 `minutesUntilSwitch` 只知道**何时**变，不知道**变成什么**：
+   * `2× → 1×`（降价）与 `1× → 2×`（涨价）的倒计时数字没区别。
+   * 无下一个翻转点（如永不切换的规则）时为 undefined。
+   */
+  nextPeriod?: Period
 }
 
 /** 把 "HH:mm" 解析为当天分钟数；非法输入返回 NaN。 */
@@ -171,9 +179,14 @@ function normalizedWindows(schedule: Schedule): { start: number; end: number }[]
  * **DST 处理**：不按 `dayOffset * 1440` 累加（夏令时切换日只有 1380/1500 分钟），
  * 而是把墙上坐标解析为真实时间戳后再求差（见 `wallClockToTimestamp`）。
  */
-function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minutes: number): number {
+function minutesUntilFlip(
+  schedule: Schedule,
+  now: Date,
+  weekday: number,
+  minutes: number,
+): { minutes: number; period: Period } | undefined {
   const windows = normalizedWindows(schedule)
-  if (windows.length === 0) return Number.POSITIVE_INFINITY
+  if (windows.length === 0) return undefined
 
   const baseDate = wallClock(now, schedule.timeZone).date
   const currentState = stateAt(schedule, windows, weekday, minutes, baseDate)
@@ -239,9 +252,9 @@ function minutesUntilFlip(schedule: Schedule, now: Date, weekday: number, minute
     const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
     if (ts === undefined) continue
     const deltaMs = ts - now.getTime()
-    if (deltaMs > 0) return Math.round(deltaMs / 60000)
+    if (deltaMs > 0) return { minutes: Math.round(deltaMs / 60000), period: stateAfter }
   }
-  return Number.POSITIVE_INFINITY
+  return undefined
 }
 
 /** 在 `YYYY-MM-DD` 上加天数（按 UTC 日历，避免本地时区干扰）。 */
@@ -418,8 +431,12 @@ export function currentPeriod(schedule: Schedule, now: Date): PeriodResult {
   // 与 minutesUntilFlip 共用同一判定函数，保证「时段」与「倒计时」语义一致
   // （两者若各算各的，跨午夜窗口处会出现「说自己是 peak 却倒计时到明天」的矛盾）。
   const period = stateAt(schedule, normalizedWindows(schedule), weekday, minutes, date)
-  const minutesUntilSwitch = minutesUntilFlip(schedule, now, weekday, minutes)
-  return { period, minutesUntilSwitch }
+  const flip = minutesUntilFlip(schedule, now, weekday, minutes)
+  return {
+    period,
+    minutesUntilSwitch: flip?.minutes ?? Number.POSITIVE_INFINITY,
+    ...(flip === undefined ? {} : { nextPeriod: flip.period }),
+  }
 }
 
 /**

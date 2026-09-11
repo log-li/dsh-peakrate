@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parseCatalog } from '../src/catalog.js'
 import { currentPeriod, formatCountdown, type Schedule } from '../src/schedule.js'
+import { parseMultiplier } from '../src/client/rate.js'
 
 /** 数据源里的 ollama-deepseek-v4：UTC 周一–五 12:00-18:00。 */
 const OLLAMA: Schedule = {
@@ -438,5 +439,81 @@ describe('★ campaign 活动态（schedule.overrides）', () => {
       peakWindows: [{ start: '12:00', end: '18:00' }],
     }
     expect(currentPeriod(plain, utc('2026-09-14T13:00:00Z')).period).toBe('peak')
+  })
+})
+
+describe('★ nextPeriod —— 让调用方能回答「之后是变贵还是变便宜」', () => {
+  it('峰时窗口内 → 翻转后是谷', () => {
+    const r = currentPeriod(OLLAMA, utc('2026-09-14T15:00:00Z'))
+    expect(r.period).toBe('peak')
+    expect(r.nextPeriod).toBe('offPeak')
+  })
+
+  it('谷时（当天还有窗口）→ 翻转后是峰', () => {
+    const r = currentPeriod(OLLAMA, utc('2026-09-14T11:00:00Z'))
+    expect(r.period).toBe('offPeak')
+    expect(r.nextPeriod).toBe('peak')
+  })
+
+  it('campaign 窗口内 → 翻转后回到常规态', () => {
+    const zai: Schedule = {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [1, 2, 3, 4, 5],
+      peakWindows: [{ start: '14:00', end: '18:00' }],
+      overrides: [
+        {
+          period: 'campaign',
+          startDate: '2026-09-03',
+          endDate: '2026-09-20',
+          days: [0, 1, 2, 3, 4, 5, 6],
+          windows: [{ start: '23:00', end: '09:00' }],
+        },
+      ],
+    }
+    const r = currentPeriod(zai, new Date('2026-09-10T23:30:00+08:00'))
+    expect(r.period).toBe('campaign')
+    // 活动窗口 09:00 结束；周四 09:00 不落在常规峰时窗口 → offPeak
+    expect(r.nextPeriod).toBe('offPeak')
+  })
+
+  it('活动开始前 → nextPeriod 是 campaign（能预告「要进活动了」）', () => {
+    const zai: Schedule = {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [1, 2, 3, 4, 5],
+      peakWindows: [{ start: '14:00', end: '18:00' }],
+      overrides: [
+        {
+          period: 'campaign',
+          startDate: '2026-09-03',
+          endDate: '2026-09-20',
+          days: [0, 1, 2, 3, 4, 5, 6],
+          windows: [{ start: '23:00', end: '09:00' }],
+        },
+      ],
+    }
+    const r = currentPeriod(zai, new Date('2026-09-10T22:50:00+08:00'))
+    expect(r.period).toBe('offPeak')
+    expect(r.nextPeriod).toBe('campaign')
+    expect(r.minutesUntilSwitch).toBe(10)
+  })
+
+  it('无窗口的规则没有翻转点 → nextPeriod 为 undefined', () => {
+    const empty: Schedule = { timeZone: 'UTC', peakDays: [1], peakWindows: [] }
+    expect(currentPeriod(empty, utc('2026-09-14T12:00:00Z')).nextPeriod).toBeUndefined()
+  })
+})
+
+describe('★ parseMultiplier / trend —— 涨跌方向判定（不猜）', () => {
+  it('从各类徽章抽取数字倍率', () => {
+    expect(parseMultiplier('2×')).toBe(2)
+    expect(parseMultiplier('1×')).toBe(1)
+    expect(parseMultiplier('0.5×')).toBe(0.5)
+    expect(parseMultiplier('1× credits')).toBe(1)
+    expect(parseMultiplier('0.8× credits')).toBe(0.8)
+  })
+
+  it('文字徽章抽不出数字 → undefined（活动态即此情形）', () => {
+    expect(parseMultiplier('Campaign')).toBeUndefined()
+    expect(parseMultiplier(undefined)).toBeUndefined()
   })
 })

@@ -142,7 +142,13 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     ),
     countdown === ''
       ? null
-      : React.createElement('span', { className: 'dsh-peakrate-chip-countdown' }, ` · ${countdown}`),
+      : React.createElement(
+          'span',
+          { className: 'dsh-peakrate-chip-countdown' },
+          rate.trend === undefined
+            ? ` · ${countdown}`
+            : ` · ${countdown} ${rate.trend === 'up' ? '↑' : '↓'}`,
+        ),
   )
 }
 
