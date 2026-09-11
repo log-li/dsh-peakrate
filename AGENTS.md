@@ -277,6 +277,21 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
 5. **设置 → 插件 → 插件配置** 出现「模型峰谷倍率」卡片，展开后覆盖表正常且**无 ⚠ 告警**
 
+## 文案与本地化（i18n）
+
+**新增任何面向用户的文案，必须同时补 zh 与 en 两本字典**（`src/client/index.tsx` 的
+`zh` / `en`）。理由：插件跟随 harness 的 locale 设置，**在中文环境下漏翻一处完全看不出来**，
+只有把 harness 切成英文才会暴露。
+
+- UI 一律走 `t('key')`；**不要**在组件或 `rate.ts` 这类共享层里硬编码中文
+  （悬停详情曾整段硬编码中文，切英文就露馅）。
+- 字典键集一致性由 `test/i18n.test.ts` 强制（键缺失、多余、英文值含 CJK、中文值含成句英文）。
+- 验证英文的真实方法：`settings.yaml` 的 `locale.preference` 改 `en`，
+  重载后看 UI；**务必用 shell `trap` 保证恢复**（改设置是全局的，遗忘会留在英文）。
+- harness 的 locale 服务契约：`locale.register(ns, { zh, en })`（双语齐备是**运行时**要求，
+  缺一本会抛）+ `locale.bind(ns)`。官方插件还会 `declare module` 扩充
+  `LocaleNamespaceMap` 以获得编译期键校验 —— 本插件尚未做（纯类型层面缺失，不影响运行）。
+
 ## 提交门禁
 
 - **Spec 先行**：行为/配置变化 → 先更新 spec（`.plans/spec/dsh-peakrate-spec.md `）

@@ -75,11 +75,15 @@ export function periodName(profile: RateProfile, period: Period): string {
  * @param state - 该模型的倍率状态。
  * @param formatCountdown - 倒计时格式化函数（由调用方注入，避免重复实现）。
  */
+/** 翻译函数签名（与 harness locale 的 `t` 一致）。 */
+export type Translate = (key: string, params?: Record<string, unknown>) => string
+
 export function detailText(
   state: RateState,
   formatCountdown: (minutes: number) => string,
+  t: Translate,
 ): string {
-  return detailLines(state, formatCountdown).join('\n')
+  return detailLines(state, formatCountdown, t).join('\n')
 }
 
 /**
@@ -92,25 +96,28 @@ export function detailText(
 export function detailLines(
   state: RateState,
   formatCountdown: (minutes: number) => string,
+  t: Translate,
 ): string[] {
   const { profile, period, badge } = state
   const currentName = periodName(profile, period)
   const lines = [
     `${profile.providerName} · ${profile.modelLabel}`,
-    `当前：${currentName}（${badge}）`,
+    t('detail.current', { name: currentName, badge }),
   ]
   if (period === 'campaign' && profile.campaignDetail !== undefined) {
     lines.push(profile.campaignDetail)
   }
-  lines.push(`峰 ${profile.peakBadge} / 谷 ${profile.offPeakBadge}`)
+  lines.push(t('detail.range', { peak: profile.peakBadge, offPeak: profile.offPeakBadge }))
   const countdown = formatCountdown(state.minutesUntilSwitch)
   if (countdown !== '') {
     lines.push(
       state.nextBadge === undefined
-        ? `${countdown} 后切换`
-        : `${countdown} 后切换 → ${state.nextBadge}`,
+        ? t('detail.switch', { countdown })
+        : t('detail.switchTo', { countdown, badge: state.nextBadge }),
     )
   }
-  if (profile.verifiedAt !== undefined) lines.push(`核验于 ${profile.verifiedAt}`)
+  if (profile.verifiedAt !== undefined) {
+    lines.push(t('detail.verified', { date: profile.verifiedAt }))
+  }
   return lines
 }

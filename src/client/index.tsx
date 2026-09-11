@@ -107,6 +107,8 @@ interface ChipProps {
     subscribe: (fn: () => void) => () => void
   }
   peakrate?: PeakrateFace
+  /** 本地化函数（悬停详情需要按语言渲染）。 */
+  t?: (key: string, params?: Record<string, unknown>) => string
 }
 
 /**
@@ -147,7 +149,7 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
     'span',
     {
       className: `dsh-peakrate-chip dsh-peakrate-${rate.period}`,
-      title: detailText(rate, formatCountdown),
+      title: detailText(rate, formatCountdown, props.t ?? ((k) => k)),
     },
     React.createElement(
       'span',
@@ -198,6 +200,11 @@ const zh: Record<string, string> = {
   'settings.colModel': '模型',
   'settings.colRate': '当前倍率',
   'settings.colProfile': '命中 profile',
+  'detail.current': '当前：{name}（{badge}）',
+  'detail.range': '峰 {peak} / 谷 {offPeak}',
+  'detail.switch': '{countdown} 后切换',
+  'detail.switchTo': '{countdown} 后切换 → {badge}',
+  'detail.verified': '核验于 {date}',
   'settings.colCount': '覆盖',
   'settings.source': '目录来源：{origin} · 更新于 {when}',
   'settings.originRemote': '远端',
@@ -246,6 +253,11 @@ const en: Record<string, string> = {
   'settings.colModel': 'Model',
   'settings.colRate': 'Current rate',
   'settings.colProfile': 'Matched profile',
+  'detail.current': 'Now: {name} ({badge})',
+  'detail.range': 'Peak {peak} / off-peak {offPeak}',
+  'detail.switch': 'Switches in {countdown}',
+  'detail.switchTo': 'Switches in {countdown} → {badge}',
+  'detail.verified': 'Verified {date}',
   'settings.colCount': 'Covered',
   'settings.source': 'Catalog: {origin} · updated {when}',
   'settings.originRemote': 'remote',
@@ -373,6 +385,7 @@ export function apply(ctx: Context): void {
               available: sessions.subagentAddress(sessionId) === undefined,
               directory: directory.store,
               peakrate: DEFAULT_FACE,
+              t,
             }
           },
         },

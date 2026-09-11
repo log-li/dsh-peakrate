@@ -15,7 +15,7 @@
 [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
 [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-<img src="docs/hero-model-selector.png" width="620" alt="Rate badges on every row of the model selector" />
+<img src="docs/hero-model-selector.png" width="430" alt="Rate badges on every model across every provider in the model selector" />
 
 </div>
 
@@ -41,6 +41,7 @@ dsh-peakrate reads the schedule that applies to each provider, works out the sta
 - 🧭 **`npm run audit`** — an offline coverage sweep over the live provider × model set, flagging providers that need a decision.
 - 🪶 **Zero runtime dependencies** — time arithmetic is `Intl.DateTimeFormat` and `Date`. No date library.
 - 🎨 **Design-token styling** — colours come from the harness's own `--dsw-*` tokens, so it follows light/dark with everything else.
+- 🌐 **Bilingual** — every string goes through the harness locale service; the plugin ships complete **English** and **简体中文** dictionaries and follows your harness language setting.
 
 ## 📚 Table of contents
 
@@ -70,9 +71,11 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## What you see
 
-**In the model selector** — every row carries the rate that applies to that model at this moment, grouped exactly as the harness groups them:
+**In the model selector** — every row carries the rate that applies to that model at this moment, grouped exactly as the harness groups them. Across eight providers you can see the whole price landscape at once and switch to whichever model is cheapest *right now*:
 
-<img src="docs/hero-model-selector.png" width="560" alt="Model selector with per-row rate badges" />
+<img src="docs/hero-model-selector.png" width="430" alt="Model selector with per-row rate badges across providers" />
+
+Models with no time-based pricing simply carry no badge (Kimi K3, Hy3, Omen Alpha above) — that is the honest state, not a missing lookup.
 
 **In the composer tool row** — the current model's rate, always visible:
 

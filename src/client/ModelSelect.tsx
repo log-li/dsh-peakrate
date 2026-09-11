@@ -33,7 +33,7 @@ import {
   Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCountdown } from '../schedule.js'
-import { rateFor, type RateState } from './rate.js'
+import { detailText, type Translate, rateFor, type RateState } from './rate.js'
 import { RateIcon } from './icons.js'
 import type { MatchConfig, RateProfile } from '../matching.js'
 
@@ -427,7 +427,7 @@ export function ModelSelect({
                             'dsh-peakrate-ms-option',
                             selected && 'dsh-peakrate-ms-selected',
                           )}
-                          title={rate === undefined ? model.name : `${model.name}\n${rateDetail(rate)}`}
+                          title={rate === undefined ? model.name : `${model.name}\n${rateDetail(rate, t)}`}
                           disabled={busy}
                           onClick={() => choose({ provider: group.id, model: model.id })}
                           key={model.id}
@@ -553,8 +553,10 @@ function RateChip({ state }: { state: RateState | undefined }): React.ReactEleme
   )
 }
 
-/** 菜单行 title 里的详情文案。 */
-function rateDetail(state: RateState): string {
-  const name = state.period === 'peak' ? state.profile.peakName : state.profile.offPeakName
-  return `${state.profile.providerName} · ${name}（${state.badge}）`
+/**
+ * 菜单行 title 里的详情文案 —— 与 composer 徽章**共用同一套本地化详情**
+ * （`detailText`），避免两处各造一套格式、也避免其中一处漏翻。
+ */
+function rateDetail(state: RateState, t: Translate): string {
+  return detailText(state, formatCountdown, t)
 }
