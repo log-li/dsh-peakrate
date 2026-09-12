@@ -6,14 +6,7 @@
 
 > 🌐 **简体中文**: [README.zh.md](./README.zh.md) · **English**: [README.md](./README.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
-[![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
-[![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE) [![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin) [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
 <img src="docs/hero-model-selector.png" width="640" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
 
@@ -72,14 +65,11 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## 你会看到什么
 
-**模型选择器里** —— 打开你本来就在用的选择器（即顶部那张图），每一行都带该模型此刻适用的倍率。
-同一个倍率同时**常驻在下方 composer 工具行**，你付的什么价一直看得见。
+**模型选择器里** —— 打开你本来就在用的选择器（即顶部那张图），每一行都带该模型此刻适用的倍率。 同一个倍率同时**常驻在下方 composer 工具行**，你付的什么价一直看得见。
 
-上图里四种倍率形态同时在场：`2×` 峰时、`1×` 与 `0.5×` 谷时、`0.8× credits` 套餐、以及限时的 `Campaign` 活动。
-没有时段计价的模型**就是不带徽章** —— 那是诚实的状态，不是漏查。
+上图里四种倍率形态同时在场：`2×` 峰时、`1×` 与 `0.5×` 谷时、`0.8× credits` 套餐、以及限时的 `Campaign` 活动。 没有时段计价的模型**就是不带徽章** —— 那是诚实的状态，不是漏查。
 
-**悬停徽章**看详情：此刻什么态、多久之后变成什么。浮层由插件**自己绘制**（非系统 tooltip），
-跟随明暗主题，键盘聚焦同样能唤出：
+**悬停徽章**看详情：此刻什么态、多久之后变成什么。浮层由插件**自己绘制**（非系统 tooltip）， 跟随明暗主题，键盘聚焦同样能唤出：
 
 <img src="docs/hover-card.png" width="720" alt="悬停详情浮层" />
 
@@ -138,8 +128,7 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 **整组零命中**的 provider 会被顶到前面并告警。**部分未命中刻意不告警**：同一个 provider 下常混有「有/无时段计价」两类模型（比如一个 Ollama 分组里既有 DeepSeek 又有 GLM），每行都提示等于没提示。
 
-面板顶部的**数据来源行**（如上图的「目录来源：远端 · 更新于 …」）说明当前用的是远端目录还是内置快照；
-右侧**「立即刷新」**强制重新拉取一次。`enabled` 与 `refreshIntervalHours` 也在这里编辑，**即时生效**。
+面板顶部的**数据来源行**（如上图的「目录来源：远端 · 更新于 …」）说明当前用的是远端目录还是内置快照； 右侧**「立即刷新」**强制重新拉取一次。`enabled` 与 `refreshIntervalHours` 也在这里编辑，**即时生效**。
 
 ## 配置
 

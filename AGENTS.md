@@ -3,18 +3,15 @@
 DSH 生态插件：显示模型的峰谷倍率与切换倒计时，三处呈现：
 
 1. **composer 工具行**（追加式，`conversation.input.left`）——免开菜单即见当前模型倍率；
-2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷，
-   选型时可直接比价；
+2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷， 选型时可直接比价；
 3. **设置 → 插件 → 插件配置 卡片**（追加式，`settings.plugin.item`）——可展开的实时覆盖面板
    + 规则说明；并让插件的 `enabled` / `refreshIntervalHours` 可在界面里编辑。
 
 第 2 项是**有意遮蔽**自带 UI，必须遵守「**功能超集**」纪律（见下方槽位坑）。
 
-**三种时段态**：`peak`（峰）/ `offPeak`（谷）/ **`campaign`（限时活动，来自
-`schedule.overrides`，带日期区间与星期过滤，优先级高于常规峰谷）**。
+**三种时段态**：`peak`（峰）/ `offPeak`（谷）/ **`campaign`（限时活动，来自 `schedule.overrides`，带日期区间与星期过滤，优先级高于常规峰谷）**。
 
-**设计真相见 spec**：`.plans/spec/dsh-peakrate-spec.md ` —— 改行为前先读它，
-改行为后先更新它（全局「Spec 先行规则」）。
+**设计真相见 spec**：`.plans/spec/dsh-peakrate-spec.md ` —— 改行为前先读它， 改行为后先更新它（全局「Spec 先行规则」）。
 
 ## 形态
 
@@ -25,11 +22,8 @@ DSH bundle 插件 + client 半边，加入 profile 的 `dsh.profile.bundles` 即
 
 ## 硬约束（违反即偏离 spec）
 
-1. **零 npm 依赖**：时区与时段计算只用原生 `Intl.DateTimeFormat` + `Date`。
-   **禁止**引入 luxon / date-fns / dayjs 等任何日期库。
-2. **不复制参考实现的代码**：`dsh-peak-indicator`、`dsh-model-picker`、
-   `dsh-quota-panel` 等（均 MIT）只借结构与算法思路，本项目自行实现；
-   确有借鉴时在文件头注明灵感来源。
+1. **零 npm 依赖**：时区与时段计算只用原生 `Intl.DateTimeFormat` + `Date`。 **禁止**引入 luxon / date-fns / dayjs 等任何日期库。
+2. **不复制参考实现的代码**：`dsh-peak-indicator`、`dsh-model-picker`、 `dsh-quota-panel` 等（均 MIT）只借结构与算法思路，本项目自行实现； 确有借鉴时在文件头注明灵感来源。
 3. **样式只用 `--dsw-*` 设计 token**，不硬编码颜色。
 4. **不显示金额**：本插件只显示倍率与倒计时，不做单价/花费计算。
 
@@ -57,162 +51,72 @@ dsh-peakrate/
 └── test/                 # 纯函数单测 + 匹配表快照测试
 ```
 
-**`schedule.ts` 与 `matching.ts` 必须保持纯函数**（不依赖 DSH 运行时），
-所有时段边界与匹配规则都靠它们的单测覆盖。
+**`schedule.ts` 与 `matching.ts` 必须保持纯函数**（不依赖 DSH 运行时）， 所有时段边界与匹配规则都靠它们的单测覆盖。
 
 ## 关键 API
 
-模型目录走官方 `ctx.modelDirectories.directoryFor(sessionId)`（与自带 `/model`
-弹窗共享同一 `ModelDirectory`），**不自行枚举 provider 配置**。
+模型目录走官方 `ctx.modelDirectories.directoryFor(sessionId)`（与自带 `/model` 弹窗共享同一 `ModelDirectory`），**不自行枚举 provider 配置**。
 
 ## DSH 插件通用坑（踩过的）
 
-- **host 侧 `ctx.set` 必须先 `ctx.provide`**：cordis 里 `ctx.set(name, …)` 只能
-  **覆写已注册**的服务；首次注册必须 `ctx.provide(name, …)`，否则启动即崩
-  `cannot set property "X" without provide`（实测：dsh-peakrate 首发踩坑）。
-- **client 包必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**：
-  服务端把各插件 client bundle **原样拼接**成 classic `<script>` 批量 bundle，
-  esbuild `--format=esm` + `--external:react` 会留下裸 `import * as React`，
-  整批 12.9MB 脚本 SyntaxError → 浏览器报 `Failed to load plugins`（`client-modules:
-  bundle script … failed to load`）。正确做法：esbuild 打 CJS 后手工包一层
-  `window.__ModuleLoader__.load({ id, factory: (require) => { …return module.exports } })`
-  （与官方/第三方插件 lib/client.js 格式一致）。
-- **client 拿不到 host 的服务，且注册 slot 必须传 `inject`**：host 树与 client 树是
-  两套独立 cordis 实例，client 侧 `ctx.get('peakrate')` 拿不到 host 的服务。数据要靠
-  ① 构建期注入（`__PEAKRATE_PROFILES__` 烤进 bundle）+ ② 注册时传
-  `inject: () => ({ peakrate: … })` 提供注入面。**漏掉 inject 的后果极隐蔽**：
-  插件加载成功、host 正常、单测全绿，但组件读到的数据恒为空 → **UI 一个徽章都不显示**。
-  回归测试见 `test/bundle-contract.test.ts`（从构建产物验证，而非直接喂纯函数）。
+- **host 侧 `ctx.set` 必须先 `ctx.provide`**：cordis 里 `ctx.set(name, …)` 只能 **覆写已注册**的服务；首次注册必须 `ctx.provide(name, …)`，否则启动即崩 `cannot set property "X" without provide`（实测：dsh-peakrate 首发踩坑）。
+- **client 包必须是 `window.__ModuleLoader__.load({ id, factory })` 包裹的 CJS**： 服务端把各插件 client bundle **原样拼接**成 classic `<script>` 批量 bundle， esbuild `--format=esm` + `--external:react` 会留下裸 `import * as React`， 整批 12.9MB 脚本 SyntaxError → 浏览器报 `Failed to load plugins`（`client-modules: bundle script … failed to load`）。正确做法：esbuild 打 CJS 后手工包一层 `window.__ModuleLoader__.load({ id, factory: (require) => { …return module.exports } })` （与官方/第三方插件 lib/client.js 格式一致）。
+- **client 拿不到 host 的服务，且注册 slot 必须传 `inject`**：host 树与 client 树是 两套独立 cordis 实例，client 侧 `ctx.get('peakrate')` 拿不到 host 的服务。数据要靠 ① 构建期注入（`__PEAKRATE_PROFILES__` 烤进 bundle）+ ② 注册时传 `inject: () => ({ peakrate: … })` 提供注入面。**漏掉 inject 的后果极隐蔽**： 插件加载成功、host 正常、单测全绿，但组件读到的数据恒为空 → **UI 一个徽章都不显示**。 回归测试见 `test/bundle-contract.test.ts`（从构建产物验证，而非直接喂纯函数）。
 
-- **★ 遮蔽 `shadows-shipped-ui` 槽位的纪律**（2026-09-12 两次教训）：
-  这类槽位注册即**遮蔽（取代）官方实现**。
-  - **默认禁止**：优先用 `replaceRisk: none` 的 **list/keyed** 槽位做纯追加。
-    查法：Client Slots Inspect `listSubTree` 给出 `kind` / `replaceRisk`。
+- **★ 遮蔽 `shadows-shipped-ui` 槽位的纪律**（2026-09-12 两次教训）： 这类槽位注册即**遮蔽（取代）官方实现**。
+  - **默认禁止**：优先用 `replaceRisk: none` 的 **list/keyed** 槽位做纯追加。 查法：Client Slots Inspect `listSubTree` 给出 `kind` / `replaceRisk`。
   - **确有必要时**（如官方组件内部毫无扩展点，只能重写）：
     1. 在 `src/client/index.tsx` 的 **`INTENTIONALLY_SHADOWED`** 清单登记并**写明理由**；
     2. **必须功能超集**——官方有的交互（键盘/aria/portal/toast/错误态…）一个都不能少；
     3. 官方包须 **MIT**（或兼容许可），否则只可借鉴思路不可照搬；
     4. 隔离实例逐项对照验证（见下方「隔离实例实机验证」）；
     5. 记录上游版本（当前 `0.1.5-rc.1`），DSH 升级时对照重移植。
-  - **血的教训**：本插件曾用**残缺的**替换实现接管
-    `conversation.input.model`（无 effort 选择、无加载/错误态）→
-    **用户无法切换模型**。**「槽位允许替换」≠「应该替换」**。
-  - **守卫测试**：`test/bundle-contract.test.ts` 读 `INTENTIONALLY_SHADOWED`：
-    清单**之外**的 shadowing 槽位一律禁止注册；清单内的必须写明理由。**改 slot 必跑它**。
+  - **血的教训**：本插件曾用**残缺的**替换实现接管 `conversation.input.model`（无 effort 选择、无加载/错误态）→ **用户无法切换模型**。**「槽位允许替换」≠「应该替换」**。
+  - **守卫测试**：`test/bundle-contract.test.ts` 读 `INTENTIONALLY_SHADOWED`： 清单**之外**的 shadowing 槽位一律禁止注册；清单内的必须写明理由。**改 slot 必跑它**。
 
-- **★ client 插件的 `inject` 必须含 `remote.session`**（2026-09-12 实测）：
-  `modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，依赖
-  `remote.session`。缺了它会在**浏览器运行时**抛
-  `cannot get property "remote.session" without inject`——服务端产物、类型检查、
-  单测**全部正常**，只有真实浏览器能暴露。
-  官方 `dsh-client-ui-model-selection` 的 inject 为
-  `["commandUi","locale","sessions","slots","remote","remote.session"]`。
-  **新增消费服务时，先对照官方同类插件的 inject 清单，不要凭需要猜。**
+- **★ client 插件的 `inject` 必须含 `remote.session`**（2026-09-12 实测）： `modelDirectories.directoryFor()` 内部要解析会话的模型选择投影，依赖 `remote.session`。缺了它会在**浏览器运行时**抛 `cannot get property "remote.session" without inject`——服务端产物、类型检查、 单测**全部正常**，只有真实浏览器能暴露。 官方 `dsh-client-ui-model-selection` 的 inject 为 `["commandUi","locale","sessions","slots","remote","remote.session"]`。 **新增消费服务时，先对照官方同类插件的 inject 清单，不要凭需要猜。**
 
-- **取服务用属性访问，不要用 `ctx.get()`**：cordis 的服务代理只在**属性访问**
-  （`scope.slots`）时把 `this.ctx` 绑定到调用方上下文；`get()` 拿到未绑定实例，
-  其内部依赖解析不到。用 `scope.get('modelDirectories')` 实测会触发上面的报错。
+- **取服务用属性访问，不要用 `ctx.get()`**：cordis 的服务代理只在**属性访问** （`scope.slots`）时把 `this.ctx` 绑定到调用方上下文；`get()` 拿到未绑定实例， 其内部依赖解析不到。用 `scope.get('modelDirectories')` 实测会触发上面的报错。
 
-- **★ 想遮蔽 `single` 槽位必须给 `priority`，且要**低于**对方**（2026-09-12 实测）：
-  `single` 槽位**同一优先级只允许一个注册**，官方占 `0`；不给 `priority` 会直接抛
-  `single slot "X" already has a registration at priority 0 (registered by Z8)
-  — register at a different priority to shadow it (lowest renders)`。
-  源码语义（`dsh-web-frontend` 的 slots 实现）：
-  ```js
-  p.sort(kind === 'list'
-    ? (a, b) => priority - priority || order - order
-    : (a, b) => priority - priority)   // single/keyed：按 priority 升序
-  ```
-  条目按 priority **升序**排列，而 `entriesOfSlot` 对 single **只取第一个**
-  → **优先级最低者渲染**。所以遮蔽官方（0）要用 **`priority: -1`**。
+- **★ 想遮蔽 `single` 槽位必须给 `priority`，且要**低于**对方**（2026-09-12 实测）： `single` 槽位**同一优先级只允许一个注册**，官方占 `0`；不给 `priority` 会直接抛 `single slot "X" already has a registration at priority 0 (registered by Z8) — register at a different priority to shadow it (lowest renders)`。 源码语义（`dsh-web-frontend` 的 slots 实现）： ```js p.sort(kind === 'list' ? (a, b) => priority - priority || order - order : (a, b) => priority - priority)   // single/keyed：按 priority 升序 ``` 条目按 priority **升序**排列，而 `entriesOfSlot` 对 single **只取第一个** → **优先级最低者渲染**。所以遮蔽官方（0）要用 **`priority: -1`**。
 
-- **★ esbuild 的 `--loader:.css=text` 只把 CSS 变成字符串，必须自己注入 DOM**
-  （2026-09-12 实测）：缺了注入这一步，**所有 CSS 类名都没有样式** ——
-  表现为菜单 `position: static` 跑到视口外、`max-height` 失效、布局全乱。
-  做法与官方同构（**带去重**）：
-  ```js
-  const tagId = 'dsh-peakrate/style.css'
-  if (document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) {
-    const tag = document.createElement('style')
-    tag.dataset.plugin = 'dsh-peakrate'
-    tag.dataset.pluginCss = tagId
-    tag.textContent = css          // import css from './style.css'
-    document.head.appendChild(tag)
-  }
-  ```
-  **契约测试与 DOM 断言都发现不了**——只有真实浏览器量 `getComputedStyle` 才暴露。
+- **★ esbuild 的 `--loader:.css=text` 只把 CSS 变成字符串，必须自己注入 DOM** （2026-09-12 实测）：缺了注入这一步，**所有 CSS 类名都没有样式** —— 表现为菜单 `position: static` 跑到视口外、`max-height` 失效、布局全乱。 做法与官方同构（**带去重**）： ```js const tagId = 'dsh-peakrate/style.css' if (document.querySelector(`style[data-plugin-css="${tagId}"]`) === null) { const tag = document.createElement('style') tag.dataset.plugin = 'dsh-peakrate' tag.dataset.pluginCss = tagId tag.textContent = css          // import css from './style.css' document.head.appendChild(tag) } ``` **契约测试与 DOM 断言都发现不了**——只有真实浏览器量 `getComputedStyle` 才暴露。
 
-- **★ 防静默遗漏：新 provider 必须有明确归属**（2026-09-12 教训）：
-  匹配的默认行为是「匹配不到就什么都不显示」——**缺少决策会被当成决策就是不做**。
-  因此每个已知 provider 必须**要么在 `DEFAULT_PROVIDER_ALIASES` 有映射、
-  要么在 `UNMATCHED_BY_DESIGN` 写明理由**（守卫测试强制）。
-  - **判断依据是上游是否有峰谷定价，不是数据源是否收录**：转售方（如 OpenCode Go
-    转售 DeepSeek）**继承上游规则**，而数据源只收录直连厂商。
-  - 新增 provider 时：先查其文档/定价页 → 有峰谷则加映射（附依据链接进 spec §4.3），
-    无则进 `UNMATCHED_BY_DESIGN` 写理由。
+- **★ 防静默遗漏：新 provider 必须有明确归属**（2026-09-12 教训）： 匹配的默认行为是「匹配不到就什么都不显示」——**缺少决策会被当成决策就是不做**。 因此每个已知 provider 必须**要么在 `DEFAULT_PROVIDER_ALIASES` 有映射、 要么在 `UNMATCHED_BY_DESIGN` 写明理由**（守卫测试强制）。
+  - **判断依据是上游是否有峰谷定价，不是数据源是否收录**：转售方（如 OpenCode Go 转售 DeepSeek）**继承上游规则**，而数据源只收录直连厂商。
+  - 新增 provider 时：先查其文档/定价页 → 有峰谷则加映射（附依据链接进 spec §4.3）， 无则进 `UNMATCHED_BY_DESIGN` 写理由。
   - 交付前跑「覆盖穷举」审计（见下方验证节）。
 
-- **★ `settings.plugin.item` 的 key 必须是 Host 提供的 settings 命名空间**
-  （2026-09-12 实测）：该页签只渲染 key ∈ `settings.describe().namespaces` 的卡片
-  （见 dsh-client-ui-settings-plugins 的 `publish()`）。
-  **光在 settings.yaml 加一个顶层 key 不会被 serve** —— 必须在 **host 半边**
-  调 `ctx.inject(['settings'], c => c.settings.installSection(ctx, ns, schema, entry, hooks))`
-  声明命名空间（范例 `dsh-tool-subagent/lib/model-selection-settings.js`），
-  schema 用 `@deepseek-ai/schemastery`（共享包 → peerDependency）。
-  收益不止「卡片能渲染」：**插件的配置项由此变成界面可编辑**。
+- **★ `settings.plugin.item` 的 key 必须是 Host 提供的 settings 命名空间** （2026-09-12 实测）：该页签只渲染 key ∈ `settings.describe().namespaces` 的卡片 （见 dsh-client-ui-settings-plugins 的 `publish()`）。 **光在 settings.yaml 加一个顶层 key 不会被 serve** —— 必须在 **host 半边** 调 `ctx.inject(['settings'], c => c.settings.installSection(ctx, ns, schema, entry, hooks))` 声明命名空间（范例 `dsh-tool-subagent/lib/model-selection-settings.js`）， schema 用 `@deepseek-ai/schemastery`（共享包 → peerDependency）。 收益不止「卡片能渲染」：**插件的配置项由此变成界面可编辑**。
 
-- **★ `settings.installSection` 的钩子契约：`setSource` 只交接一次，`onChange` 才是变更信号**
-  （2026-09-12 用**写文件探针**实测）。契约是「**存读取器 + 按需再拉**」：
+- **★ `settings.installSection` 的钩子契约：`setSource` 只交接一次，`onChange` 才是变更信号** （2026-09-12 用**写文件探针**实测）。契约是「**存读取器 + 按需再拉**」：
   - `setSource(reader)` **只在安装时调用一次**，把「读当前用户设置」的函数交给你；
   - 用户之后每次编辑**只触发 `onChange`**，**不会**再调 `setSource`；
-  - 因此**不能在 `setSource` 里一次性取值就完事**，必须在 `onChange`（或每个使用点）
-    调 `reader()` 重新拉取。官方两个使用方（`dsh-agent-loop` / `dsh-tool-subagent`）
-    都是 `setSource: (s) => { source = s }` + 用时读 `source()`。
-  - 反例：本插件曾写 `setSource: (s) => applySettings(s())` + `onChange: () => {}`
-    → 用户编辑**永远到不了运行中的实例**（静默失效，UI 看着正常）。
-  - 探针方法（可靠且可复用）：在回调里 `fs.appendFileSync('/tmp/probe.log', …)`，
-    重启实例后改一次 `settings.yaml`，读文件即可看出哪个回调被触发。
+  - 因此**不能在 `setSource` 里一次性取值就完事**，必须在 `onChange`（或每个使用点） 调 `reader()` 重新拉取。官方两个使用方（`dsh-agent-loop` / `dsh-tool-subagent`） 都是 `setSource: (s) => { source = s }` + 用时读 `source()`。
+  - 反例：本插件曾写 `setSource: (s) => applySettings(s())` + `onChange: () => {}` → 用户编辑**永远到不了运行中的实例**（静默失效，UI 看着正常）。
+  - 探针方法（可靠且可复用）：在回调里 `fs.appendFileSync('/tmp/probe.log', …)`， 重启实例后改一次 `settings.yaml`，读文件即可看出哪个回调被触发。
 
-- **★ 请求处理路径上访问未 inject 的服务 → 抛错 → webserver 兜底成 HTTP 400**
-  （2026-09-12 实测）：`ctx.webRuntime` 这类属性访问在未声明 inject 时抛
-  `cannot get property "webRuntime" without inject`；而**路由 handler 抛出的异常会被
-  dsh-host-webserver 兜成 `writeHead(400)`** —— 症状是「路由匹配上了（未知路径 404、
-  本路由 400）却全 400」，且**日志里什么都看不到**（插件 logger 不进 stdout）。
-  排查法：`curl -i` 看是谁返回的；对照一个不存在的路径拿到 404 即可确认路由已匹配。
-  修法：用 `ctx.get('x')` 或把整段包 try/catch —— **围栏类代码宁可退化成保守行为，
-  也不能让路由 400/500**。
+- **★ 请求处理路径上访问未 inject 的服务 → 抛错 → webserver 兜底成 HTTP 400** （2026-09-12 实测）：`ctx.webRuntime` 这类属性访问在未声明 inject 时抛 `cannot get property "webRuntime" without inject`；而**路由 handler 抛出的异常会被 dsh-host-webserver 兜成 `writeHead(400)`** —— 症状是「路由匹配上了（未知路径 404、 本路由 400）却全 400」，且**日志里什么都看不到**（插件 logger 不进 stdout）。 排查法：`curl -i` 看是谁返回的；对照一个不存在的路径拿到 404 即可确认路由已匹配。 修法：用 `ctx.get('x')` 或把整段包 try/catch —— **围栏类代码宁可退化成保守行为， 也不能让路由 400/500**。
 
-- **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到
-  哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。
-  **只传 `id` 会注册失败**。写法对照真实产物：
-  `slots.inject('settings.section', () => slots.register({ name: 'settings.section', id: 'memory', order: 100 }, C))`
-  （见 dsh-plugin-memory / dsh-mcp-manager / dshmarket 的 `lib/client.js`）。
+- **list 槽位的 `register` 必须同时传 `name` 与 `id`**：`name` = 槽位键（决定注册到 哪儿），`id` = **自己的** cell 键（自有 id = 追加，复用别人的 id = 占用其单元格）。 **只传 `id` 会注册失败**。写法对照真实产物： `slots.inject('settings.section', () => slots.register({ name: 'settings.section', id: 'memory', order: 100 }, C))` （见 dsh-plugin-memory / dsh-mcp-manager / dshmarket 的 `lib/client.js`）。
 
-- **一条插件只能有一条注册路径**：要么 profile `package.json` 的
-  `dsh.profile.bundles`，要么 `cordis.patch.yml` 手动 `insert`，**绝不能两者都做**
-  → 否则启动即崩：`duplicate loader entry id: <id>`。
-- **host 树 ≠ client 树**：`cordis.patch.yml` 的 `disabled: true` 只命中 host 树，
-  管不住 `client.inject` 拉入的 client 侧插件。client 侧报错要顺
-  `lib/client.js` 的 require 链找第一个 missing 模块。
-- **不得在 `dependencies` 声明 DSH 共享宿主包**（`@deepseek-ai/dsh`、
-  `@deepseek-ai/cordis` 等）——会遮蔽宿主版本。用 `peerDependencies`。
+- **一条插件只能有一条注册路径**：要么 profile `package.json` 的 `dsh.profile.bundles`，要么 `cordis.patch.yml` 手动 `insert`，**绝不能两者都做** → 否则启动即崩：`duplicate loader entry id: <id>`。
+- **host 树 ≠ client 树**：`cordis.patch.yml` 的 `disabled: true` 只命中 host 树， 管不住 `client.inject` 拉入的 client 侧插件。client 侧报错要顺 `lib/client.js` 的 require 链找第一个 missing 模块。
+- **不得在 `dependencies` 声明 DSH 共享宿主包**（`@deepseek-ai/dsh`、 `@deepseek-ai/cordis` 等）——会遮蔽宿主版本。用 `peerDependencies`。
 
 ## 验证
 
 **单测**（纯函数，不依赖 DSH 运行时）：
 
-- `schedule.ts`：五类边界——峰时窗口内、窗口间隙、周末全天谷、周五末段跨周末、
-  周日结束回峰时；以及同一时刻在 UTC 与 Asia/Shanghai 两种时区下的判定
-- `matching.ts`：别名命中/未命中、`:` 后缀剥离、V4 系宽松归属、无匹配返回空、
-  config 覆盖优先级
+- `schedule.ts`：五类边界——峰时窗口内、窗口间隙、周末全天谷、周五末段跨周末、 周日结束回峰时；以及同一时刻在 UTC 与 Asia/Shanghai 两种时区下的判定
+- `matching.ts`：别名命中/未命中、`:` 后缀剥离、V4 系宽松归属、无匹配返回空、 config 覆盖优先级
 
 **构建产物契约**（`test/bundle-contract.test.ts`，从 `lib/client.js` 验证）：
 
 - 产物是 `__ModuleLoader__` 包裹的 CJS、可被 classic script 解析
 - 除 `INTENTIONALLY_SHADOWED` 清单外，**不得注册任何 shadowing 槽位**
 - 清单内的槽位**必须写明理由**（>20 字符，防无理由遮蔽）
-- `conversation.input.left` 用 `id`（追加）；`conversation.input.model` 用 `name` +
-  `priority: -1`（遮蔽）
+- `conversation.input.left` 用 `id`（追加）；`conversation.input.model` 用 `name` + `priority: -1`（遮蔽）
 - 接管选择器时**必须同时保留**工具行徽章（两者互补，不可二选一）
 - 注入面能给出非空 profiles，端到端能算出正确判定
 - `inject` 含 `slots`/`sessions`/`modelDirectories`/`remote`/`remote.session`
@@ -241,14 +145,9 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 #    关键断言：徽章渲染 + 自带选择器可用 + **控制台错误为 0**
 ```
 
-**必查三项**：① 控制台/pageerror **为 0**；② 自带 UI 仍可用（真的去点它）；
-③ 徽章渲染且数值正确。**「服务端下发了产物」≠「运行时无错」** —— 本次
-`remote.session` 缺陷正是服务端一切正常、浏览器才报错。
+**必查三项**：① 控制台/pageerror **为 0**；② 自带 UI 仍可用（真的去点它）； ③ 徽章渲染且数值正确。**「服务端下发了产物」≠「运行时无错」** —— 本次 `remote.session` 缺陷正是服务端一切正常、浏览器才报错。
 
-**与官方逐项对照**（fork 的槽位尤其重要——曾在此翻车）：同一脚本分别跑
-「启用插件」与「禁用插件」两种配置，行为必须一致。已验证一致的项目：
-根面板两项 · 列表行数与分组 · 点当前模型关菜单 · 点其它模型发出
-`POST /api/session/selectModel` → 200 · Escape 逐级返回 · 页面错误 0。
+**与官方逐项对照**（fork 的槽位尤其重要——曾在此翻车）：同一脚本分别跑 「启用插件」与「禁用插件」两种配置，行为必须一致。已验证一致的项目： 根面板两项 · 列表行数与分组 · 点当前模型关菜单 · 点其它模型发出 `POST /api/session/selectModel` → 200 · Escape 逐级返回 · 页面错误 0。
 
 > **注意**：隔离 profile 的 `selectModel` 虽返回 200，但 UI 投影不刷新
 > （官方同样如此）——属该环境的限制，**不能据此判断切换成功**。
@@ -256,8 +155,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 
 ### ★ 交付前「覆盖穷举」审计（2026-09-12 教训，必做）
 
-**背景**：ocg/opencode-go 曾因「数据源没收录」被静默漏掉 —— 把「数据源覆盖率」
-误当成「上游是否有峰谷定价」。防范机制见 spec §4.4。
+**背景**：ocg/opencode-go 曾因「数据源没收录」被静默漏掉 —— 把「数据源覆盖率」 误当成「上游是否有峰谷定价」。防范机制见 spec §4.4。
 
 **做法**（每次装机前）：
 1. 打开 **设置 → 插件 → 插件配置 → 模型峰谷倍率**，通读「当前覆盖情况」表；
@@ -266,8 +164,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
    - 「endpoint 未被识别 / 漏配」→ 补 `DEFAULT_PROVIDER_ALIASES` + 映射 + 回归测试。
 3. 确认每一条排除都有依据（**附链接**），并把结论同步进 spec §4.3。
 
-**⚠ 判据是「整组零命中」，不是「有未命中」** —— 同一 provider 下混有非峰谷计价的
-模型（如 ollama 下的 GLM/Kimi）是正常的，全部提示等于没提示。
+**⚠ 判据是「整组零命中」，不是「有未命中」** —— 同一 provider 下混有非峰谷计价的 模型（如 ollama 下的 GLM/Kimi）是正常的，全部提示等于没提示。
 
 **实机验收**（装进 web profile 后开新会话）——见 spec §10：
 
@@ -279,36 +176,25 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 
 ## 文案与本地化（i18n）
 
-**新增任何面向用户的文案，必须同时补 zh 与 en 两本字典**（`src/client/index.tsx` 的
-`zh` / `en`）。理由：插件跟随 harness 的 locale 设置，**在中文环境下漏翻一处完全看不出来**，
-只有把 harness 切成英文才会暴露。
+**新增任何面向用户的文案，必须同时补 zh 与 en 两本字典**（`src/client/index.tsx` 的 `zh` / `en`）。理由：插件跟随 harness 的 locale 设置，**在中文环境下漏翻一处完全看不出来**， 只有把 harness 切成英文才会暴露。
 
-- UI 一律走 `t('key')`；**不要**在组件或 `rate.ts` 这类共享层里硬编码中文
-  （悬停详情曾整段硬编码中文，切英文就露馅）。
+- UI 一律走 `t('key')`；**不要**在组件或 `rate.ts` 这类共享层里硬编码中文 （悬停详情曾整段硬编码中文，切英文就露馅）。
 - 字典键集一致性由 `test/i18n.test.ts` 强制（键缺失、多余、英文值含 CJK、中文值含成句英文）。
-- 验证英文的真实方法：`settings.yaml` 的 `locale.preference` 改 `en`，
-  重载后看 UI；**务必用 shell `trap` 保证恢复**（改设置是全局的，遗忘会留在英文）。
-- harness 的 locale 服务契约：`locale.register(ns, { zh, en })`（双语齐备是**运行时**要求，
-  缺一本会抛）+ `locale.bind(ns)`。官方插件还会 `declare module` 扩充
-  `LocaleNamespaceMap` 以获得编译期键校验 —— 本插件尚未做（纯类型层面缺失，不影响运行）。
+- 验证英文的真实方法：`settings.yaml` 的 `locale.preference` 改 `en`， 重载后看 UI；**务必用 shell `trap` 保证恢复**（改设置是全局的，遗忘会留在英文）。
+- harness 的 locale 服务契约：`locale.register(ns, { zh, en })`（双语齐备是**运行时**要求， 缺一本会抛）+ `locale.bind(ns)`。官方插件还会 `declare module` 扩充 `LocaleNamespaceMap` 以获得编译期键校验 —— 本插件尚未做（纯类型层面缺失，不影响运行）。
 
 ## 截图纪律（2026-09-12，已被用户纠三次）
 
-**任何放进 README 的截图都必须自带足够上下文，让人一眼看出：这是界面里的哪个位置、
-是什么操作触发的。** 只截「功能本体」的那一小块 = 读者不知道它从哪来。
+**任何放进 README 的截图都必须自带足够上下文，让人一眼看出：这是界面里的哪个位置、 是什么操作触发的。** 只截「功能本体」的那一小块 = 读者不知道它从哪来。
 
-- **要包含**：所在面板/页面（设置导航、聊天窗、composer 卡片…）+ 触发该状态的操作痕迹
-  （如光标 + `hover` 标签指向被悬停的元素）。
-- **反面**：单独截模型选择器内部；单独截 hover 浮层与徽章（看不出鼠标放哪儿、
-  也看不出这是在聊天输入框那行）。
-- **技巧**：Playwright 截不到系统光标 —— 截图前**临时在页面里注入**一个光标 SVG
-  指向触发元素（只注入到截图，不进代码，不违反「不伪造」）。
+- **要包含**：所在面板/页面（设置导航、聊天窗、composer 卡片…）+ 触发该状态的操作痕迹 （如光标 + `hover` 标签指向被悬停的元素）。
+- **反面**：单独截模型选择器内部；单独截 hover 浮层与徽章（看不出鼠标放哪儿、 也看不出这是在聊天输入框那行）。
+- **技巧**：Playwright 截不到系统光标 —— 截图前**临时在页面里注入**一个光标 SVG 指向触发元素（只注入到截图，不进代码，不违反「不伪造」）。
 - **尺寸取舍**：宁可宽一点也要保留上下文；窄图看着精炼但读者看不懂，等于没截。
 
 ## npm 可信发布（OIDC）的三个坑（2026-09-12，v0.2.0 发布时逐个踩到）
 
-目标是「推一个 tag 就自动发版，免 OTP、免长期 token」。**三个坑会依次伪装成不同错误**，
-每个都掩盖下一个，所以必须一次全对：
+目标是「推一个 tag 就自动发版，免 OTP、免长期 token」。**三个坑会依次伪装成不同错误**， 每个都掩盖下一个，所以必须一次全对：
 
 | # | 坑 | 症状 | 正解 |
 |---|---|---|---|
@@ -319,23 +205,18 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 **识别要领**：
 - `provenance 已签署成功但仍 404/ENEEDAUTH` → **签名是本地行为，不证明授权**，别被它误导。
 - 错误码在 E404 / ENEEDAUTH 之间跳变 → 几乎总是「认证方式被抢」而非「权限不足」。
-- 成功标志：npm 上该版本的 `_npmUser.name` 是 **`GitHub Actions`**（OIDC 身份），
-  而不是你自己的账号（那是 token 发布）。
+- 成功标志：npm 上该版本的 `_npmUser.name` 是 **`GitHub Actions`**（OIDC 身份）， 而不是你自己的账号（那是 token 发布）。
 
-**另需**：npm 网站 → 该包 → Settings → Trusted Publisher 填 GitHub Actions /
-`<owner>` / `<repo>` / `release.yml`，**Environment 留空**（填了就要在 job 上写
-`environment:` 且两处完全一致）。
+**另需**：npm 网站 → 该包 → Settings → Trusted Publisher 填 GitHub Actions / `<owner>` / `<repo>` / `release.yml`，**Environment 留空**（填了就要在 job 上写 `environment:` 且两处完全一致）。
 
 ## CHANGELOG 的结构要求（2026-09-12 踩到）
 
 CHANGELOG 有**两个消费方**，都很容易被我忽略：
 
-1. **GitHub Release notes 由脚本从本文件提取** —— `release.yml` 里按
-   `## [<version>]` 正则切片，**英文块与中文块各切一次**（以 `# 更新日志` 为分界）。
+1. **GitHub Release notes 由脚本从本文件提取** —— `release.yml` 里按 `## [<version>]` 正则切片，**英文块与中文块各切一次**（以 `# 更新日志` 为分界）。
 2. 本文件本身在 GitHub 上渲染给人看。
 
-**因此每个版本必须在「英文块」与「中文块」里各有一个 `## [x.y.z]` 标题。**
-只加英文标题、把中文变更写成 `### 变更（x.y.z）` 挂在**上一个版本**下面，会造成两个后果：
+**因此每个版本必须在「英文块」与「中文块」里各有一个 `## [x.y.z]` 标题。** 只加英文标题、把中文变更写成 `### 变更（x.y.z）` 挂在**上一个版本**下面，会造成两个后果：
 - 中文里**版本归属错位**（新版本的变更看起来属于旧版本）；
 - **Release notes 的中文块静默丢失**（提取器在中文区找不到该版本的 `## [...]`）。
 
@@ -343,18 +224,27 @@ CHANGELOG 有**两个消费方**，都很容易被我忽略：
 
 自查：`grep -n "^## " CHANGELOG.md` —— 中英两块里的版本号序列应当**完全一致**。
 
+## Markdown 一律不手动折行（2026-09-12，用户纠到）
+
+**一条列表 / 一个段落 = 源码里一行。** 绝不为「好看」在 80–100 字符处手动回车。
+
+- **原因**：GitHub 桌面端把段内换行折成空格（看着正常），但**手机 App 逐行显示** ——
+  硬折行会变成一排长短不齐的短行，出现 `and is` / `be` 这种孤字结尾，读者以为内容被截断。
+- **实测**：CHANGELOG 的硬折行在 iOS GitHub App 上正是这个症状（用户截图）。
+- **例外**：代码块（含 ASCII 图）、表格、以及**确实需要换行**的 HTML。
+- **批量修法**（可复用）：写脚本把「非块首」的行并入上一行 —— 块首 = 标题 / 表格行 /
+  引用 / 列表标记（**含缩进**的 `- ` `1. `）/ 代码围栏 / HTML 标签 / 分隔线；
+  代码围栏内一律不动。合并后核对：围栏数为偶数、表格行数不变、标题数不变、单测全绿。
+- 中文同理：中文段落**尤其**不要折行（中文没有词间空格，折行后手机端更难读）。
+
 ## 提交门禁
 
 - **Spec 先行**：行为/配置变化 → 先更新 spec（`.plans/spec/dsh-peakrate-spec.md `）
 - **README 同步**：配置项/命令/默认值变化 → 一并更新 README
-- **独立模型家族 review 在验证之前**：顺序固定为
-  **写代码 → 独立 review → 按 review 修正 → 验证 → commit → push**。
-  review 未过（有【严重】问题）不得进入验证；验证通过后再改代码须重新验证。
+- **独立模型家族 review 在验证之前**：顺序固定为 **写代码 → 独立 review → 按 review 修正 → 验证 → commit → push**。 review 未过（有【严重】问题）不得进入验证；验证通过后再改代码须重新验证。
 - **push 前敏感信息检查**：不落本机绝对路径、用户名、本地 provider 路由组合
 
 ## 文档落位
 
-- **spec（活文档）**：`.plans/spec/dsh-peakrate-spec.md ` —— 描述项目**现在是什么样**，
-  文件名不带日期、永不搬家，滚动更新；日期与变更历史写在文件内，历史靠 `git log` 回溯。
-- **plan（一次性快照）**：`.plans/proposed/YYYY-MM-DD-<slug>.md` → 实现后移
-  `.plans/implemented/` —— 记录**当时为什么这么定**，与 spec 分工不重叠。
+- **spec（活文档）**：`.plans/spec/dsh-peakrate-spec.md ` —— 描述项目**现在是什么样**， 文件名不带日期、永不搬家，滚动更新；日期与变更历史写在文件内，历史靠 `git log` 回溯。
+- **plan（一次性快照）**：`.plans/proposed/YYYY-MM-DD-<slug>.md` → 实现后移 `.plans/implemented/` —— 记录**当时为什么这么定**，与 spec 分工不重叠。

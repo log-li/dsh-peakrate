@@ -6,14 +6,7 @@
 
 > 🌐 **简体中文**: [README.zh.md](./README.zh.md) · **English**: [README.md](./README.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate)
-[![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate)
-[![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin)
-[![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE) [![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin) [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
 <img src="docs/hero-model-selector.png" width="640" alt="Rate badges on every model across every provider in the model selector" />
 
@@ -72,15 +65,11 @@ dsh plugin add ./path/to/dsh-peakrate
 
 ## What you see
 
-**In the model selector** — open the picker you already use (the shot at the top), and every row
-carries the rate that applies to that model at this moment. The same rate stays visible in the
-composer tool row below, so what you are paying never leaves your sight.
+**In the model selector** — open the picker you already use (the shot at the top), and every row carries the rate that applies to that model at this moment. The same rate stays visible in the composer tool row below, so what you are paying never leaves your sight.
 
 Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a `0.8× credits` plan, and a limited-time `Campaign` window. Models with no time-based pricing simply carry no badge — that is the honest state, not a missing lookup.
 
-**Hover the badge** for the detail: the state now, and what it becomes and when. The card is drawn
-by the plugin itself (not an OS tooltip), so it follows the theme and is reachable by keyboard
-focus too:
+**Hover the badge** for the detail: the state now, and what it becomes and when. The card is drawn by the plugin itself (not an OS tooltip), so it follows the theme and is reachable by keyboard focus too:
 
 <img src="docs/hover-card.png" width="720" alt="Hover detail card" />
 
@@ -126,8 +115,7 @@ Judgement is made against a curated catalog, so a provider is either **mapped** 
 
 ## Coverage panel
 
-**Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a
-silent misconfiguration**, and **refresh the catalog**.
+**Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a silent misconfiguration**, and **refresh the catalog**.
 
 <img src="docs/coverage-card.png" width="760" alt="Coverage panel under Settings → Plugins" />
 
@@ -140,9 +128,7 @@ silent misconfiguration**, and **refresh the catalog**.
 
 A provider where **nothing at all** matched is raised to the top as a warning. Partial coverage is deliberately *not* flagged: a provider commonly mixes models with and without time-based pricing (an Ollama group holding both DeepSeek and GLM, for instance), and flagging every such row would be noise.
 
-The **source line** at the top (visible in the screenshot above) reports whether the current catalog
-is the *remote* one or the *bundled snapshot*, with **Refresh now** beside it. `enabled` and
-`refreshIntervalHours` are editable here and take effect immediately.
+The **source line** at the top (visible in the screenshot above) reports whether the current catalog is the *remote* one or the *bundled snapshot*, with **Refresh now** beside it. `enabled` and `refreshIntervalHours` are editable here and take effect immediately.
 
 ## Configuration
 
@@ -219,8 +205,7 @@ Fetched catalogs are validated strictly: unknown schema versions, malformed cloc
 | `schedule.ts` · `matching.ts` · `coverage.ts` | **pure**: state + countdown / provider+model matching / coverage report |
 | `client/` | the three surfaces, runtime catalog fetch with fallback, selector fork, icons, styles |
 
-`schedule.ts`, `matching.ts` and `coverage.ts` are pure and runtime-independent; every time boundary
-and matching rule is covered by unit tests.
+`schedule.ts`, `matching.ts` and `coverage.ts` are pure and runtime-independent; every time boundary and matching rule is covered by unit tests.
 
 ### Surfaces
 
