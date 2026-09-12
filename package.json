@@ -1,6 +1,6 @@
 {
   "name": "dsh-peakrate",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Peak / off-peak rate badges and switch countdown for DeepSeek Harness — per provider, per model, in the model selector and the composer tool row. Judges each provider by its own time zone and schedule instead of DeepSeek-only hours.",
   "type": "module",
   "keywords": [

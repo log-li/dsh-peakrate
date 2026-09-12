@@ -67,6 +67,13 @@ dsh plugin --profile web add ./path/to/dsh-peakrate
 > 所以 `pnpm` 必须在 `PATH` 上（否则会报
 > `pnpm not found on PATH — install pnpm to manage profile plugins`）。
 
+> **请注意：本插件会替换官方的模型选择器。**
+> 它接管了 `conversation.input.model` 槽位 —— 你从 composer 打开的选择器将变成本插件自己的组件，
+> 而不再是内置的那个。这个接管是**有意为之，且是功能超集**：键盘导航、aria 接线、portal 定位、
+> 加载 / 空 / 错误 / 重试状态、以及推理等级子菜单**全部保留**，倍率是按行**加在上面**的。
+> 上游组件为 MIT，移植所依据的版本记录在 `src/client/index.tsx`。由于是**替换**而非扩展，
+> 将来 DSH 若重构该选择器，可能需要重新移植 —— 见[兼容性与贡献](#兼容性与贡献)。
+
 **装完请重启 `dsh web`。** 本插件在 host 半边声明了 settings 命名空间，而 host 代码只在启动时读取。重启后覆盖卡片会出现在 **设置 → 插件 → 插件配置**。
 
 ## 你会看到什么
@@ -223,6 +230,17 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 模型选择器的接管是官方组件的**完整超集** —— 键盘导航、aria 接线、portal 定位、加载/空/错误/重试态、推理等级二级菜单，一个都不少。上游包是 MIT，移植版本记录在 `src/client/index.tsx` 中；`test/bundle-contract.test.ts` 的守卫测试会在**任何其他自带 UI 槽位**被遮蔽时让构建失败。
 
 ## 兼容性与贡献
+
+### 已实测范围
+
+| | |
+|---|---|
+| **DeepSeek Harness** | macOS 上的 `0.1.5-rc.1` |
+| **安装路径** | 用**已发布的 npm 包**在一个**新建 profile** 上做过端到端验证（`dsh plugin --profile … add dsh-peakrate`）—— bundle 注册、目录路由、三处呈现、控制台零错误 |
+| **尚未验证** | 其他 DSH 版本；Linux 与 Windows；已经自定义过模型选择器的 profile |
+
+最可能出问题的是**选择器接管**：它替换的是一个 shipped-UI 槽位，因此上游一旦改动选择器结构，
+就需要刷新移植。移植所依据的版本记录在 `src/client/index.tsx`。
 
 - 需要提供 `conversation.input.model` 与 `settings.plugin.item` 槽位的 DeepSeek Harness 构建。选择器移植自 `@deepseek-ai/dsh-client-ui-model-selection@0.1.5-rc.1`。
 - peer 依赖：`@deepseek-ai/cordis`、`@deepseek-ai/schemastery`。

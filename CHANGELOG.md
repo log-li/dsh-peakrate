@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-12
+
+### Changed
+
+- **The README now says up front that this plugin replaces the official model selector.** It always did take over the `conversation.input.model` slot — that is the point, and the replacement is a functional superset — but the fact was only stated deep inside *Architecture → Surfaces*. Someone installing this is replacing a piece of their harness's UI and should know it before, not after. The disclosure now sits directly under the install command, together with the consequence: because the slot is replaced rather than extended, an upstream DSH release that restructures the picker can require re-porting.
+- **Added a tested-with table** so the support boundary is stated rather than implied: `0.1.5-rc.1` on macOS, installed from the **published npm package into a freshly created profile** (bundle registration, catalog route, all three surfaces, clean console). Other DSH versions, Linux and Windows, and profiles that already customise the selector are listed as **not yet verified**. The selector takeover is called out as the most likely thing to break.
+
 ## [0.2.1] - 2026-09-12
 
 ### Fixed
@@ -57,6 +64,13 @@ First public release.
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)， 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+
+## [0.2.2] - 2026-09-12
+
+### 变更
+
+- **README 现在会在开头就说明：本插件会替换官方的模型选择器。** 它一直如此 —— 接管 `conversation.input.model` 槽位正是本插件的设计，且替换版是功能超集 —— 但这个事实原先只写在「架构 → 三处呈现」的深处。安装它的人是在替换自己 harness 的一块 UI，应当在**安装前**就知道，而不是之后。该声明现在紧跟在安装命令下方，并写明其后果：由于是**替换**而非扩展，上游 DSH 一旦重构该选择器，就可能需要重新移植。
+- **新增「已实测范围」表**，把支持边界写出来而不是让人去猜：macOS 上的 `0.1.5-rc.1`，以**已发布的 npm 包**安装到**新建 profile**（bundle 注册、目录路由、三处呈现、控制台零错误）。其他 DSH 版本、Linux 与 Windows、以及已经自定义过选择器的 profile 均标注为**尚未验证**。并点名**选择器接管**是最可能出问题的地方。
 
 ## [0.2.1] - 2026-09-12
 

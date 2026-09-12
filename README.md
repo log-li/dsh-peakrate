@@ -67,6 +67,16 @@ dsh plugin --profile web add ./path/to/dsh-peakrate
 > directory, so `pnpm` must be on your `PATH` (`dsh plugin …` prints
 > `pnpm not found on PATH — install pnpm to manage profile plugins` otherwise).
 
+> **Heads-up: this plugin replaces the official model selector.**
+> It takes over the `conversation.input.model` slot, so the picker you open from the composer
+> is this plugin's own component rather than the built-in one. The takeover is **deliberate and
+> a functional superset** — keyboard navigation, aria wiring, portal positioning, loading /
+> empty / error / retry states and the reasoning-effort submenu are all preserved, and the
+> per-row rates are added on top. The upstream component is MIT and the ported revision is
+> pinned in `src/client/index.tsx`. Because the slot is *replaced* rather than extended, a
+> future DSH release that restructures the picker can require re-porting — see
+> [Compatibility](#compatibility--contributions).
+
 **Restart `dsh web` after installing.** The plugin declares a settings namespace on the host half, and host code is only read at boot. After the restart the coverage card appears under **Settings → Plugins → Plugin configuration**.
 
 ## What you see
@@ -224,6 +234,19 @@ Fetched catalogs are validated strictly: unknown schema versions, malformed cloc
 The model-selector takeover ships a complete superset of the official component — keyboard navigation, aria wiring, portal positioning, loading, empty, error and retry states, and the reasoning-effort submenu. The upstream package is MIT and the ported version is recorded in `src/client/index.tsx`; the guard test in `test/bundle-contract.test.ts` fails the build if any *other* shipped-UI slot is ever shadowed.
 
 ## Compatibility & contributions
+
+### Tested with
+
+| | |
+|---|---|
+| **DeepSeek Harness** | `0.1.5-rc.1` on macOS |
+| **Install path** | verified end-to-end on a **freshly created profile** using the published npm package (`dsh plugin --profile … add dsh-peakrate`) — bundle registration, the catalog route, all three surfaces and a clean console |
+| **Not yet verified** | other DSH versions; Linux and Windows; profiles that already customise the model selector |
+
+The most likely thing to break is the selector takeover: it replaces a shipped-UI slot, so an
+upstream release that changes the picker's structure needs the port refreshed. The revision the
+port was taken from is recorded in `src/client/index.tsx`.
+
 
 - Requires a DeepSeek Harness build providing the `conversation.input.model` and `settings.plugin.item` slots. Upstream selector ported from `@deepseek-ai/dsh-client-ui-model-selection@0.1.5-rc.1`.
 - Peer dependencies: `@deepseek-ai/cordis`, `@deepseek-ai/schemastery`.
