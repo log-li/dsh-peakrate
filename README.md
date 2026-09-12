@@ -52,14 +52,20 @@ dsh-peakrate reads the schedule that applies to each provider, works out the sta
 ## Install
 
 ```bash
-dsh plugin add dsh-peakrate
+# <profile> is your DSH profile — usually `web`. `--profile` is required:
+# `dsh plugin` forwards to pnpm inside that profile's directory.
+dsh plugin --profile web add dsh-peakrate
 ```
 
 From a local checkout:
 
 ```bash
-dsh plugin add ./path/to/dsh-peakrate
+dsh plugin --profile web add ./path/to/dsh-peakrate
 ```
+
+> **Prerequisite:** `dsh plugin` is a thin wrapper that forwards to **pnpm** inside the profile
+> directory, so `pnpm` must be on your `PATH` (`dsh plugin …` prints
+> `pnpm not found on PATH — install pnpm to manage profile plugins` otherwise).
 
 **Restart `dsh web` after installing.** The plugin declares a settings namespace on the host half, and host code is only read at boot. After the restart the coverage card appears under **Settings → Plugins → Plugin configuration**.
 

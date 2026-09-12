@@ -52,14 +52,20 @@ dsh-peakrate 读出每个 provider 各自适用的时段规则，算出**此刻*
 ## 安装
 
 ```bash
-dsh plugin add dsh-peakrate
+# <profile> 是你的 DSH profile —— 通常就是 web。`--profile` 是**必填**：
+# `dsh plugin` 会在该 profile 目录里把参数转发给 pnpm。
+dsh plugin --profile web add dsh-peakrate
 ```
 
 从本地检出安装：
 
 ```bash
-dsh plugin add ./path/to/dsh-peakrate
+dsh plugin --profile web add ./path/to/dsh-peakrate
 ```
+
+> **前置依赖**：`dsh plugin` 只是一个转发器，它把参数交给 profile 目录里的 **pnpm** 执行，
+> 所以 `pnpm` 必须在 `PATH` 上（否则会报
+> `pnpm not found on PATH — install pnpm to manage profile plugins`）。
 
 **装完请重启 `dsh web`。** 本插件在 host 半边声明了 settings 命名空间，而 host 代码只在启动时读取。重启后覆盖卡片会出现在 **设置 → 插件 → 插件配置**。
 
