@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-12
+
+### Fixed
+
+- **The install command in this file was wrong.** It read `dsh plugin add dsh-peakrate`; `--profile` is a required option (`dsh` declares it as one and forwards the rest to pnpm inside that profile's directory), so the command failed before doing anything: `error: required option '--profile <name>' not specified`. It is now `dsh plugin --profile web add dsh-peakrate`. Found by installing the published package into a freshly created profile rather than the development checkout — every earlier verification had used a `link:` install, which never exercises this path.
+- **The install section did not mention pnpm**, without which `dsh plugin` stops with `pnpm not found on PATH — install pnpm to manage profile plugins`.
+- **Installing printed a peer-dependency warning.** `@deepseek-ai/cordis` and `@deepseek-ai/schemastery` are supplied by the host at runtime, not installed alongside the plugin, so pnpm reported them as missing peers — easy to misread as a failed install. Both are now declared `optional` in `peerDependenciesMeta`.
+- `peerDependencies` tightened from `*` to explicit ranges (`cordis >=4 <5`, `schemastery >=3 <4`) so an incompatible host fails loudly instead of silently resolving.
+
 ## [0.2.0] - 2026-09-12
 
 ### Changed
@@ -48,6 +57,15 @@ First public release.
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)， 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+
+## [0.2.1] - 2026-09-12
+
+### 修复
+
+- **本文件里的安装命令是错的。** 原文为 `dsh plugin add dsh-peakrate`，而 `--profile` 是**必填**选项（`dsh` 把它声明为 requiredOption，其余参数转发给该 profile 目录里的 pnpm），所以这条命令**什么都还没做就失败了**：`error: required option '--profile <name>' not specified`。现为 `dsh plugin --profile web add dsh-peakrate`。该问题由「把已发布的包装进一个**新建 profile**」发现 —— 此前所有验证用的都是 `link:` 开发副本，从未走过这条路径。
+- **安装节没有提 pnpm**，缺少它时 `dsh plugin` 会停在 `pnpm not found on PATH — install pnpm to manage profile plugins`。
+- **安装会打印 peer 依赖警告。** `@deepseek-ai/cordis` 与 `@deepseek-ai/schemastery` 由宿主在运行时提供、不随插件安装，pnpm 因此报「missing peer」—— 容易被误读为安装失败。现已在 `peerDependenciesMeta` 中声明为 `optional`。
+- `peerDependencies` 由 `*` 收紧为显式区间（`cordis >=4 <5`、`schemastery >=3 <4`），使不兼容的宿主**大声失败**而不是静默解析。
 
 ## [0.2.0] - 2026-09-12
 
