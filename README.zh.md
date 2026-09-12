@@ -174,7 +174,7 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 | `cachePath` | `~/.dsh/peakrate/pricing.json` | 最近一次成功拉取的磁盘缓存。 |
 | `providerAliases` | 内置表 | 额外的 `provider id → 目录 provider` 映射，**覆盖内置**。 |
 | `modelMappings` | 内置表 | 额外的 `provider + 模型模式 → profile` 映射，**先于内置尝试**。 |
-| `customProfiles` | `[]` | 额外 profile（仅 host 侧生效，见下）。 |
+| `customProfiles` | `[]` | 额外 profile：按 `id` 覆盖内置条目或新增；同样参与徽章判定。 |
 
 `modelMappings` 默认是**前缀匹配**；写 `matchIsRegex: true` 则按正则。非法正则**不抛错**，只是永不命中。
 

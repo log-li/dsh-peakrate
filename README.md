@@ -177,7 +177,7 @@ Configuration lives in the profile's `cordis.patch.yml`:
 | `cachePath` | `~/.dsh/peakrate/pricing.json` | On-disk cache of the last successful fetch. |
 | `providerAliases` | built-in table | Extra `provider id → catalog provider` mappings. Yours win over the built-ins. |
 | `modelMappings` | built-in table | Extra `provider + model pattern → profile` mappings. Yours are tried first. |
-| `customProfiles` | `[]` | Additional profiles (host-side only; see below). |
+| `customProfiles` | `[]` | Additional profiles: override a bundled entry by `id`, or add a new one. They take part in badge judgement too. |
 
 `modelMappings` entries are prefix matches by default; set `matchIsRegex: true` for a regular expression. Invalid regexes do not throw — they simply never match.
 
