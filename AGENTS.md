@@ -192,6 +192,15 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 - **技巧**：Playwright 截不到系统光标 —— 截图前**临时在页面里注入**一个光标 SVG 指向触发元素（只注入到截图，不进代码，不违反「不伪造」）。
 - **尺寸取舍**：宁可宽一点也要保留上下文；窄图看着精炼但读者看不懂，等于没截。
 
+### 让 market 显示截图（2026-09-21 排查：一张都没显示）
+
+**market 卡片上的截图只取目录（awesome-dsh-plugin）条目里的 `screenshots` 字段，不在自己仓库声明就一张都不显示；README 自动抽取这条兜底也会被语义打分丢掉。**
+
+- **声明位置 = 本仓库根部的 `screenshots.json`**（`package.json` 旁，1–8 张、仓库内相对路径；`{"screenshots": [...]}` 亦可）。目录 nightly 构建自己抓取并解析成 raw URL，**不需要给目录提 PR**。旧条目的 `data/screenshots.json` 只是回退，官方明确「不要再加新键」。
+- **不要指望 README 自动抽取兜底**：market 只在**安装弹窗**里跑它（卡片不跑），只读 `README.md`（不看 `README.zh.md`），且要求语义分 ≥ 20。它的打分把 `badge / shield / logo / icon / coverage / npm / build` 当徽章·品牌噪音（label −140、path −120、heading −55），把 `detail / panel / settings` 当局部图（−30）——本插件改前的三张图实测 **−130 / −9 / −337**，全部丢弃。
+- **因此文件名与 alt 都要「像截图」且避开噪音词**：`docs/screenshot-<topic>.png` + `alt="Screenshot: …"`（label +55、path +40）。改前的 `docs/coverage-card.png` + “Coverage panel” 恰好把所有噪音词踩满。
+- **验证法**（改图或改名后必跑）：把 dshmarket 的 `extractReadmeImageCandidates`（`src/client/market-data.ts`）原样抽出来对 `README.md` 跑一遍，确认每张 ≥ 20 —— 当前 117 / 116 / 85。
+
 ## npm 可信发布（OIDC）的三个坑（2026-09-12，v0.2.0 发布时逐个踩到）
 
 目标是「推一个 tag 就自动发版，免 OTP、免长期 token」。**三个坑会依次伪装成不同错误**， 每个都掩盖下一个，所以必须一次全对：

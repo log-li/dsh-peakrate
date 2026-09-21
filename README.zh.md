@@ -8,7 +8,7 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE) [![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin) [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-<img src="docs/hero-model-selector.png" width="640" alt="模型选择器里每个 provider 的每个模型都带倍率徽章" />
+<img src="docs/screenshot-model-selector.png" width="640" alt="截图：模型选择器，每一行都标出此刻的峰谷倍率" />
 
 </div>
 
@@ -84,7 +84,7 @@ dsh plugin --profile web add ./path/to/dsh-peakrate
 
 **悬停徽章**看详情：此刻什么态、多久之后变成什么。浮层由插件**自己绘制**（非系统 tooltip）， 跟随明暗主题，键盘聚焦同样能唤出：
 
-<img src="docs/hover-card.png" width="720" alt="悬停详情浮层" />
+<img src="docs/screenshot-hover-rate-card.png" width="720" alt="截图：悬停浮层，显示此刻生效的倍率与切换时刻" />
 
 ### 三种时段态
 
@@ -126,11 +126,11 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 - 确实没有时段计价的 provider，会得到一条**写明理由**的显式记录；
 - 其余情况一律在覆盖面板里冒出告警。
 
-## 覆盖面板
+## 覆盖情况
 
 **设置 → 插件 → 插件配置**。它承担三件事：**看清覆盖**、**发现漏配**、**刷新目录**。
 
-<img src="docs/coverage-card.png" width="760" alt="设置 → 插件 里的覆盖面板" />
+<img src="docs/screenshot-settings-panel.png" width="760" alt="截图：设置 → 插件里的插件配置面板，列出每个 provider 命中了多少个模型" />
 
 
 | 列 | 含义 |

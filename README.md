@@ -8,7 +8,7 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![npm downloads](https://img.shields.io/npm/dm/dsh-peakrate)](https://www.npmjs.com/package/dsh-peakrate) [![license](https://img.shields.io/npm/l/dsh-peakrate)](./LICENSE) [![GitHub stars](https://img.shields.io/github/stars/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![GitHub last commit](https://img.shields.io/github/last-commit/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![TypeScript](https://img.shields.io/github/languages/top/log-li/dsh-peakrate)](https://github.com/log-li/dsh-peakrate) [![DSH plugin](https://img.shields.io/badge/DSH%20plugin-ecosystem-2ea043)](https://github.com/topics/dsh-plugin) [![CI](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml/badge.svg)](https://github.com/log-li/dsh-peakrate/actions/workflows/ci.yml)
 
-<img src="docs/hero-model-selector.png" width="640" alt="Rate badges on every model across every provider in the model selector" />
+<img src="docs/screenshot-model-selector.png" width="640" alt="Screenshot: the model selector, with the current peak or off-peak rate on every row" />
 
 </div>
 
@@ -87,7 +87,7 @@ Every shape of rate is in play above: `2×` peak, `1×` and `0.5×` off-peak, a 
 
 **Hover the badge** for the detail: the state now, and what it becomes and when. The card is drawn by the plugin itself (not an OS tooltip), so it follows the theme and is reachable by keyboard focus too:
 
-<img src="docs/hover-card.png" width="720" alt="Hover detail card" />
+<img src="docs/screenshot-hover-rate-card.png" width="720" alt="Screenshot: the hover card showing the rate in force now and when it switches" />
 
 ### The three states
 
@@ -129,11 +129,11 @@ Judgement is made against a curated catalog, so a provider is either **mapped** 
 - a provider with genuinely no time-based pricing gets an explicit entry with a written reason;
 - anything else shows up as a warning in the coverage panel.
 
-## Coverage panel
+## What is covered
 
 **Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a silent misconfiguration**, and **refresh the catalog**.
 
-<img src="docs/coverage-card.png" width="760" alt="Coverage panel under Settings → Plugins" />
+<img src="docs/screenshot-settings-panel.png" width="760" alt="Screenshot: the plugin configuration panel under Settings → Plugins, listing how many models each provider matched" />
 
 
 | Column | Meaning |
