@@ -214,6 +214,11 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 
 **识别要领**：
 - `provenance 已签署成功但仍 404/ENEEDAUTH` → **签名是本地行为，不证明授权**，别被它误导。
+- **成功之后仍有几分钟「查不到」**：OIDC 发布会打印
+  `npm notice Your package is being processed and may take a few minutes to become available.`
+  —— 此时 `npm view <pkg>@<ver>` 与 `registry.npmjs.org/<pkg>` 都可能**仍是 404 / 仍显示旧 latest**。
+  **别据此判定发布失败、更别重试发版**（2026-09-26 v0.3.0 实测：CI 日志已有 `+ dsh-peakrate@0.3.0`，
+  而直连 registry 查到的版本列表还是旧的；过几分钟才出现）。判失败要看 **CI 那一步的日志**，不是看当时的 registry。
 - 错误码在 E404 / ENEEDAUTH 之间跳变 → 几乎总是「认证方式被抢」而非「权限不足」。
 - 成功标志：npm 上该版本的 `_npmUser.name` 是 **`GitHub Actions`**（OIDC 身份）， 而不是你自己的账号（那是 token 发布）。
 
