@@ -50,11 +50,45 @@ function loadBundle(): Record<string, unknown> {
     useEffect: () => {},
     useSyncExternalStore: (_s: unknown, get: () => unknown) => get(),
   }
+  // UI primitive 面：本插件在 apply() 期**真的会用到**的是设置表单工具箱
+  // （构造分阶段表单模型），所以这里必须给出可用替身；图标/Toast 等只在渲染期
+  // 被取用，跳过即可。
+  const fakePrimitives = {
+    SettingsForm: () => null,
+    SettingsValueField: () => null,
+    settingsNumberField: (field: string) => ({ field }),
+    SettingsFormModel: class {
+      bind<S>(project: () => S): { getSnapshot: () => S; subscribe: (fn: () => void) => () => void } {
+        return { getSnapshot: () => project(), subscribe: () => () => {} }
+      }
+      shell(): Record<string, unknown> {
+        return {
+          available: true,
+          writable: true,
+          dirty: false,
+          invalid: false,
+          saving: false,
+          failed: false,
+        }
+      }
+      field(name: string): Record<string, unknown> {
+        return { field: name, text: '', overridden: false, invalid: false }
+      }
+      actions(): Record<string, unknown> {
+        return { edit: () => {}, resetField: () => {}, save: () => {}, discard: () => {} }
+      }
+      dispose(): void {}
+    },
+  }
   let mod: Record<string, unknown> | undefined
   const win = {
     __ModuleLoader__: {
       load: ({ factory }: { factory: (r: (n: string) => unknown) => Record<string, unknown> }) => {
-        mod = factory((name: string) => (name === 'react' ? fakeReact : null))
+        mod = factory((name: string) => {
+          if (name === 'react') return fakeReact
+          if (name === '@deepseek-ai/dsh-client-ui-primitives') return fakePrimitives
+          return null
+        })
       },
     },
   }
@@ -68,24 +102,36 @@ function loadBundle(): Record<string, unknown> {
 interface Registration {
   slot: string
   options: Record<string, unknown>
+  /** register 的第二个实参：被挂上去的组件。 */
+  component: unknown
 }
 
 /**
  * 用假的 client ctx 跑一遍 apply()，捕获注册行为。
  *
- * 复刻真实契约：`ctx.inject(deps, cb)` 会以「有 get() 的 scope」回调，
- * 且提供 slots / modelDirectories / sessions 三个服务。
+ * 复刻真实契约：`ctx.inject(deps, cb)` 会以「有属性访问的 scope」回调，
+ * 并提供 slots / modelDirectories / sessions / locale / configForms 服务。
  */
 function captureRegistration(): Registration[] {
   return captureWith({ subagentAddress: () => undefined }).regs
 }
 
+/** 完整捕获报告（注册表 + configForms 取过的命名空间）。 */
+function captureReport(): {
+  regs: Registration[]
+  namespaces: string[]
+} {
+  const { regs, namespaces } = captureWith({ subagentAddress: () => undefined })
+  return { regs, namespaces }
+}
+
 /** 可按需定制 sessions 服务的捕获。 */
 function captureWith(sessions: {
   subagentAddress: (sessionId: string) => unknown
-}): { regs: Registration[]; opts: () => Record<string, unknown> } {
+}): { regs: Registration[]; opts: () => Record<string, unknown>; namespaces: string[] } {
   const mod = loadBundle() as { apply: (ctx: unknown) => void }
   const out: Registration[] = []
+  const namespaces: string[] = []
   let pendingSlot = ''
 
   const slots = {
@@ -93,8 +139,8 @@ function captureWith(sessions: {
       pendingSlot = key
       return cb()
     },
-    register: (opts: Record<string, unknown>) => {
-      out.push({ slot: pendingSlot, options: opts })
+    register: (opts: Record<string, unknown>, component?: unknown) => {
+      out.push({ slot: pendingSlot, options: opts, component })
       return () => {}
     },
   }
@@ -102,6 +148,21 @@ function captureWith(sessions: {
     directoryFor: () => ({
       store: { getSnapshot: () => ({ current: null }), subscribe: () => () => {} },
     }),
+  }
+  // client 侧配置表单服务：entryId **就是** host 配置命名空间（0.1.7 起恒等）。
+  const configForms = {
+    get: (namespace: string) => {
+      namespaces.push(namespace)
+      return {
+        getSnapshot: () => ({ status: 'ready', value: {}, writable: true, revision: 1 }),
+        subscribe: () => () => {},
+        mutate: async () => true,
+      }
+    },
+  }
+  const locale = {
+    register: () => {},
+    bind: () => (key: string) => key,
   }
 
   // 注入作用域：**以属性**暴露服务（cordis 的服务代理要求属性访问才绑定调用方
@@ -113,13 +174,16 @@ function captureWith(sessions: {
         slots: unknown
         modelDirectories: unknown
         sessions: unknown
+        configForms: unknown
+        locale: unknown
       }) => void,
     ) => {
-      cb({ slots, modelDirectories, sessions })
+      cb({ slots, modelDirectories, sessions, configForms, locale })
     },
+    effect: () => () => {},
   }
   mod.apply(fakeCtx)
-  return { regs: out, opts: () => out[0]!.options }
+  return { regs: out, opts: () => out[0]!.options, namespaces }
 }
 
 beforeAll(() => {
@@ -182,22 +246,48 @@ describe('★ 回归：绝不【意外】注册到会遮蔽自带 UI 的槽位',
     }
   })
 
-  it('注册三处：工具行徽章、模型选择器（有意接管）、插件配置卡片', () => {
+  it('注册三处：工具行徽章、模型选择器（有意接管）、bundle 配置页', () => {
     const regs = captureRegistration()
     expect(regs.map((r) => r.slot).sort()).toEqual([
       'conversation.input.left',
       'conversation.input.model',
-      'settings.plugin.item',
+      'plugins.bundle.config',
     ])
   })
 
-  it('覆盖面板注册到 settings.plugin.item，key = 自有 settings 命名空间', () => {
+  /** ★ 回归（2026-09-26，0.1.7-rc.2 适配）：
+   * `settings.plugin.item` 在 0.1.7 已被**删除** —— 往它注册既不报错也不渲染
+   * （`slots.inject` 只是等一个永远不会声明的槽位），卡片会静默消失。
+   * 本插件的配置页因此迁到 `plugins.bundle.config`，这里把它钉死。
+   */
+  it('不得再注册到 0.1.7 已删除的 settings.plugin.item', () => {
     const regs = captureRegistration()
-    const card = regs.find((r) => r.slot === 'settings.plugin.item')
-    expect(card, '缺少插件卡片注册').toBeDefined()
-    expect(card?.options.name).toBe('settings.plugin.item')
-    // keyed 槽位：key 必须等于 Host 提供的 settings 命名空间，否则不渲染
-    expect(card?.options.key).toBe('peakrate')
+    expect(regs.map((r) => r.slot)).not.toContain('settings.plugin.item')
+  })
+
+  it('配置页注册到 plugins.bundle.config，key = npm 包名 dsh-peakrate', () => {
+    const { regs, namespaces } = captureWith({ subagentAddress: () => undefined })
+    const card = regs.find((r) => r.slot === 'plugins.bundle.config')
+    expect(card, '缺少 bundle 配置页注册').toBeDefined()
+    expect(card?.options.name).toBe('plugins.bundle.config')
+    // keyed 槽位按 **bundle 的包名**派发 key（不是 host 配置命名空间），
+    // 用错 key 会让「配置」区整块不渲染。
+    expect(card?.options.key).toBe('dsh-peakrate')
+    // 表单数据面取的是 host 配置命名空间（= profile entry id）
+    expect(namespaces).toEqual(['peakrate'])
+  })
+
+  it('配置页注入面带表单快照（hooks.settings）与倍率数据面', () => {
+    const { regs } = captureWith({ subagentAddress: () => undefined })
+    const card = regs.find((r) => r.slot === 'plugins.bundle.config')
+    const face = (card?.options.inject as () => Record<string, unknown>)()
+    const hooks = face.hooks as { settings?: { getSnapshot: () => unknown } } | undefined
+    expect(hooks?.settings?.getSnapshot()).toBeDefined()
+    // 官方 SettingsForm 需要的分阶段表单动作
+    for (const action of ['edit', 'resetField', 'save', 'discard']) {
+      expect(typeof face[action], `配置页缺少表单动作 ${action}`).toBe('function')
+    }
+    expect(face.peakrate).toBeDefined()
   })
 
   it('同时传 name（槽位键）与 id（自有 cell 键）—— 只给 id 无法注册', () => {
@@ -209,11 +299,69 @@ describe('★ 回归：绝不【意外】注册到会遮蔽自带 UI 的槽位',
     expect(opts.id).toBe('peakrate')
   })
 
+  /** ★ 回归（AGENTS.md 一直声称有这条守卫，实际此前并不存在）：
+   * single 槽位同一优先级只允许一个注册，官方占 0；不给更低 priority 会**直接抛错**，
+   * 而给成 0 或更高则会静默换成官方实现（菜单内倍率全没了）。
+   */
+  it('接管 single 槽位必须给 priority: -1（官方占 0，最低者渲染）', () => {
+    const regs = captureRegistration()
+    const seat = regs.find((r) => r.slot === 'conversation.input.model')
+    expect(seat, '缺少模型选择器接管').toBeDefined()
+    expect(seat?.options.priority).toBe(-1)
+  })
+
+  it('三处注册各自挂上正确的组件（防止「注册对了但组件挂错」）', () => {
+    const report = captureReport()
+    const byName = (slot: string): string => {
+      const reg = report.regs.find((r) => r.slot === slot)
+      const component = reg?.component as { name?: string } | undefined
+      return component?.name ?? ''
+    }
+    expect(byName('conversation.input.left')).toBe('PeakrateChip')
+    expect(byName('conversation.input.model')).toBe('ModelSelect')
+    expect(byName('plugins.bundle.config')).toBe('PeakrateSettings')
+  })
+
   it('接管 conversation.input.model 时必须同时保留工具行徽章（两者互补）', () => {
     const regs = captureRegistration()
     expect(regs.some((r) => r.slot === 'conversation.input.model')).toBe(true)
     // 原显示不被替换：追加式徽章必须仍在
     expect(regs.some((r) => r.slot === 'conversation.input.left')).toBe(true)
+  })
+})
+
+describe('★ 回归：primitives 取用的名字必须真实存在（0.1.5→0.1.7 图标改名事故）', () => {
+  /** 环境声明的文件名（与 src/client/primitives.d.ts 一致）。 */
+  const primitivesShim = fileURLToPath(new URL('../src/client/primitives.d.ts', import.meta.url))
+
+  it('构建产物从 primitives 取的每个名字，都必须出现在环境声明里', () => {
+    const code = readFileSync(clientBundle, 'utf8')
+    const accessed = [...code.matchAll(/import_dsh_client_ui_primitives\d*\.([A-Za-z0-9_]+)/g)].map(
+      (m) => m[1] as string,
+    )
+    expect(accessed.length, '产物里没找到 primitives 的取用点（探针失效）').toBeGreaterThan(5)
+    const declared = new Set(
+      [...readFileSync(primitivesShim, 'utf8').matchAll(/export (?:const|function|class) ([A-Za-z0-9_]+)/g)].map(
+        (m) => m[1] as string,
+      ),
+    )
+    const missing = [...new Set(accessed)].filter((name) => !declared.has(name))
+    expect(missing, `产物取了声明里没有的名字（tsc 抓不到，运行时是 undefined）: ${missing}`).toEqual([])
+  })
+
+  it('不得再取 0.1.7 已删除的旧图标名 Icon*Outline16 / Icon*Outline14', () => {
+    const code = readFileSync(clientBundle, 'utf8')
+    const accessed = [
+      ...new Set(
+        [...code.matchAll(/import_dsh_client_ui_primitives\d*\.([A-Za-z0-9_]+)/g)].map(
+          (m) => m[1] as string,
+        ),
+      ),
+    ]
+    // 旧名在 0.1.7 的导出面上不存在 → 取到 undefined → render 期抛
+    // 「Element type is invalid」，整块模型选择器崩掉（用户换不了模型）。
+    const legacy = accessed.filter((name) => /Outline(16|14)$/.test(name))
+    expect(legacy, `这些图标名在 0.1.7 已不存在: ${legacy}`).toEqual([])
   })
 })
 

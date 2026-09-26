@@ -4,8 +4,8 @@ DSH 生态插件：显示模型的峰谷倍率与切换倒计时，三处呈现�
 
 1. **composer 工具行**（追加式，`conversation.input.left`）——免开菜单即见当前模型倍率；
 2. **模型选择器菜单内**（有意接管 `conversation.input.model`）——每行显示该模型此刻的峰谷， 选型时可直接比价；
-3. **设置 → 插件 → 插件配置 卡片**（追加式，`settings.plugin.item`）——可展开的实时覆盖面板
-   + 规则说明；并让插件的 `enabled` / `refreshIntervalHours` 可在界面里编辑。
+3. **侧栏 Plugins（插件）→ 本插件详情页**（追加式，`plugins.bundle.config`，key = npm 包名
+   `dsh-peakrate`）——实时覆盖面板 + 可界面编辑的 `refreshIntervalHours`。
 
 第 2 项是**有意遮蔽**自带 UI，必须遵守「**功能超集**」纪律（见下方槽位坑）。
 
@@ -44,7 +44,7 @@ dsh-peakrate/
 │       ├── index.tsx     # 注册三处 + locale 文案
 │       ├── live.ts       # 运行时目录拉取 + 内置快照回退
 │       ├── ModelSelect.tsx    # fork 官方选择器（功能超集）+ 每行倍率徽章
-│       ├── SettingsSection.tsx # 「设置→插件」里的可展开配置卡片
+│       ├── SettingsSection.tsx # bundle 配置页（plugins.bundle.config）+ 分阶段设置表单
 │       ├── rate.ts       # 倍率判定共享层
 │       ├── icons.tsx     # DSH 风格单色描边 SVG 图标
 │       └── style.css     # 仅用 --dsw-* 设计 token
@@ -70,7 +70,7 @@ dsh-peakrate/
     2. **必须功能超集**——官方有的交互（键盘/aria/portal/toast/错误态…）一个都不能少；
     3. 官方包须 **MIT**（或兼容许可），否则只可借鉴思路不可照搬；
     4. 隔离实例逐项对照验证（见下方「隔离实例实机验证」）；
-    5. 记录上游版本（当前 `0.1.5-rc.1`），DSH 升级时对照重移植。
+    5. 记录上游版本（当前 `0.1.7-rc.2`，见 `src/client/ModelSelect.tsx` 文件头），DSH 升级时对照重移植。
   - **血的教训**：本插件曾用**残缺的**替换实现接管 `conversation.input.model`（无 effort 选择、无加载/错误态）→ **用户无法切换模型**。**「槽位允许替换」≠「应该替换」**。
   - **守卫测试**：`test/bundle-contract.test.ts` 读 `INTENTIONALLY_SHADOWED`： 清单**之外**的 shadowing 槽位一律禁止注册；清单内的必须写明理由。**改 slot 必跑它**。
 
@@ -87,14 +87,12 @@ dsh-peakrate/
   - 新增 provider 时：先查其文档/定价页 → 有峰谷则加映射（附依据链接进 spec §4.3）， 无则进 `UNMATCHED_BY_DESIGN` 写理由。
   - 交付前跑「覆盖穷举」审计（见下方验证节）。
 
-- **★ `settings.plugin.item` 的 key 必须是 Host 提供的 settings 命名空间** （2026-09-12 实测）：该页签只渲染 key ∈ `settings.describe().namespaces` 的卡片 （见 dsh-client-ui-settings-plugins 的 `publish()`）。 **光在 settings.yaml 加一个顶层 key 不会被 serve** —— 必须在 **host 半边** 调 `ctx.inject(['settings'], c => c.settings.installSection(ctx, ns, schema, entry, hooks))` 声明命名空间（范例 `dsh-tool-subagent/lib/model-selection-settings.js`）， schema 用 `@deepseek-ai/schemastery`（共享包 → peerDependency）。 收益不止「卡片能渲染」：**插件的配置项由此变成界面可编辑**。
-
-- **★ `settings.installSection` 的钩子契约：`setSource` 只交接一次，`onChange` 才是变更信号** （2026-09-12 用**写文件探针**实测）。契约是「**存读取器 + 按需再拉**」：
-  - `setSource(reader)` **只在安装时调用一次**，把「读当前用户设置」的函数交给你；
-  - 用户之后每次编辑**只触发 `onChange`**，**不会**再调 `setSource`；
-  - 因此**不能在 `setSource` 里一次性取值就完事**，必须在 `onChange`（或每个使用点） 调 `reader()` 重新拉取。官方两个使用方（`dsh-agent-loop` / `dsh-tool-subagent`） 都是 `setSource: (s) => { source = s }` + 用时读 `source()`。
-  - 反例：本插件曾写 `setSource: (s) => applySettings(s())` + `onChange: () => {}` → 用户编辑**永远到不了运行中的实例**（静默失效，UI 看着正常）。
-  - 探针方法（可靠且可复用）：在回调里 `fs.appendFileSync('/tmp/probe.log', …)`， 重启实例后改一次 `settings.yaml`，读文件即可看出哪个回调被触发。
+- **★★ DSH 0.1.7 起：settings 命名空间 = 模块导出的 `Config`，没有安装 API 了**（2026-09-26 实机踩到）：
+  - **注册方式**：插件模块**导出 `Config`（schemastery schema）就是注册本身** —— `settings.describe()` 取的是 `entry.fiber.runtime.Config`，命名空间 = profile 里那条 loader entry 的 `id`（本项目 = `peakrate`）。0.1.5 时代的 `settings.installSection(ctx, ns, schema, entry, hooks)` **已被删除**，调用它会 `TypeError: settings.installSection is not a function`，**整条 host fiber 加载失败**。
+  - **可界面编辑的字段必须标 `volatile()`**：schema 校验会把它解析成**稳定引用**（运行时是 `{ get() }`，不是标量！），用户保存后 loader 把新值写进引用并发 `ctx.on('loader/volatile-update', …)`（事件不带值 → 自己重读）。官方范例 `llm-deepseek`（`config.ts` + `host.ts`），逐字可抄。没标 volatile 的字段改它等于重新装载插件。
+  - **界面载体**：配置页注册到 **`plugins.bundle.config`**，key = **npm 包名**（`dsh-peakrate`，**不是**配置命名空间 `peakrate`）；表单数据面用 client 服务 `configForms.get(ns)`，控件用官方 `@deepseek-ai/dsh-client-ui-primitives` 的 `SettingsForm` / `SettingsFormModel` / `SettingsValueField`（分阶段草稿 + revision 围栏保存）。`settings.plugin.item` 已删除，`dsh.client.inject` 要声明 `@deepseek-ai/dsh-client-ui-settings`（cookbook §5）。
+  - **⚠ 失败形态是静默的**：往已删除的槽位注册**不报错**（`slots.inject` 只是等一个永不声明的槽位），卡片直接消失 —— 与「漏注册」同形。守卫测试因此同时断言「新槽位注册了」+「旧槽位没注册」。
+  - **0.1.7 还改了一批 UI primitive 名字**：`Icon*Outline16/14` → **`Icon*OutlineRegular`**（尺寸改走 `size` prop）。旧名取到的是 `undefined` → render 期 React「Element type is invalid」，整块模型选择器崩掉。`src/client/primitives.d.ts` 的环境声明**必须跟着改**，否则 tsc 会替旧名背书；守卫测试见 `test/bundle-contract.test.ts` 的「primitives 取用名」两条。
 
 - **★ 请求处理路径上访问未 inject 的服务 → 抛错 → webserver 兜底成 HTTP 400** （2026-09-12 实测）：`ctx.webRuntime` 这类属性访问在未声明 inject 时抛 `cannot get property "webRuntime" without inject`；而**路由 handler 抛出的异常会被 dsh-host-webserver 兜成 `writeHead(400)`** —— 症状是「路由匹配上了（未知路径 404、 本路由 400）却全 400」，且**日志里什么都看不到**（插件 logger 不进 stdout）。 排查法：`curl -i` 看是谁返回的；对照一个不存在的路径拿到 404 即可确认路由已匹配。 修法：用 `ctx.get('x')` 或把整段包 try/catch —— **围栏类代码宁可退化成保守行为， 也不能让路由 400/500**。
 
@@ -117,6 +115,9 @@ dsh-peakrate/
 - 除 `INTENTIONALLY_SHADOWED` 清单外，**不得注册任何 shadowing 槽位**
 - 清单内的槽位**必须写明理由**（>20 字符，防无理由遮蔽）
 - `conversation.input.left` 用 `id`（追加）；`conversation.input.model` 用 `name` + `priority: -1`（遮蔽）
+- `plugins.bundle.config` 用 `key: 'dsh-peakrate'`（npm 包名）；且**不得**再注册 0.1.7 已删除的 `settings.plugin.item`
+- 三处注册各自挂上正确组件（`PeakrateChip` / `ModelSelect` / `PeakrateSettings`），防「注册对了但组件挂错」
+- 产物从 primitives 取用的名字**必须在环境声明里**，且不得是 `Icon*Outline16/14` 旧名
 - 接管选择器时**必须同时保留**工具行徽章（两者互补，不可二选一）
 - 注入面能给出非空 profiles，端到端能算出正确判定
 - `inject` 含 `slots`/`sessions`/`modelDirectories`/`remote`/`remote.session`
@@ -158,7 +159,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 **背景**：ocg/opencode-go 曾因「数据源没收录」被静默漏掉 —— 把「数据源覆盖率」 误当成「上游是否有峰谷定价」。防范机制见 spec §4.4。
 
 **做法**（每次装机前）：
-1. 打开 **设置 → 插件 → 插件配置 → 模型峰谷倍率**，通读「当前覆盖情况」表；
+1. 打开 **侧栏 Plugins（插件）→ dsh-peakrate 详情页 → 当前覆盖情况**，通读覆盖表；
 2. 若顶部出现 **⚠ N 个 provider 完全没有命中** 告警 → **逐个确认**：
    - 「确实没有峰谷定价」→ 在 `src/matching.ts` 的 `UNMATCHED_BY_DESIGN` 写明理由；
    - 「endpoint 未被识别 / 漏配」→ 补 `DEFAULT_PROVIDER_ALIASES` + 映射 + 回归测试。
@@ -172,7 +173,7 @@ dsh --profile peakrate-test --host 127.0.0.1 --port 3099 --no-open
 2. 菜单内每行显示倍率；未匹配的模型（如 kimi-k3）**什么都不显示**
 3. composer 工具行的当前模型徽章仍在（与菜单呈现互补）
 4. `ollama`（UTC）与 `deepseek-official`（北京时）的倒计时**各自正确**
-5. **设置 → 插件 → 插件配置** 出现「模型峰谷倍率」卡片，展开后覆盖表正常且**无 ⚠ 告警**
+5. **侧栏 Plugins → dsh-peakrate 详情页**出现配置区：覆盖表正常且**无 ⚠ 告警**，刷新间隔字段可编辑并保存生效
 
 ## 文案与本地化（i18n）
 

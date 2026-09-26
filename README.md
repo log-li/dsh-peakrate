@@ -31,7 +31,7 @@ dsh-peakrate reads the schedule that applies to each provider, works out the sta
 - 📋 **Every row in the model selector** — compare providers *before* switching. Selection only ever happens from this panel, so the information lands exactly where the decision does.
 - 📌 **Composer tool-row badge** — the current model's rate and countdown, one glance away, no menu required.
 - 🔄 **Live catalog** — the host half refreshes the shared catalog every 24 hours and serves it to the page over a fenced route, so a data update reaches the badges without a rebuild. **Refresh now** is one click away in the coverage panel.
-- 🔍 **Coverage panel** — under *Settings → Plugins*, every configured provider × model with what it matched, plus a warning for any provider where **nothing at all** matched. That shape is a silent misconfiguration, and it is the one thing this plugin is designed never to hide.
+- 🔍 **Coverage panel** — on this plugin's page under the **Plugins** sidebar panel, every configured provider × model with what it matched, plus a warning for any provider where **nothing at all** matched. That shape is a silent misconfiguration, and it is the one thing this plugin is designed never to hide.
 - 🧭 **`npm run audit`** — an offline coverage sweep over the live provider × model set, flagging providers that need a decision.
 - 🪶 **Zero runtime dependencies** — time arithmetic is `Intl.DateTimeFormat` and `Date`. No date library.
 - 🎨 **Design-token styling** — colours come from the harness's own `--dsw-*` tokens, so it follows light/dark with everything else.
@@ -73,11 +73,11 @@ dsh plugin --profile web add ./path/to/dsh-peakrate
 > a functional superset** — keyboard navigation, aria wiring, portal positioning, loading /
 > empty / error / retry states and the reasoning-effort submenu are all preserved, and the
 > per-row rates are added on top. The upstream component is MIT and the ported revision is
-> pinned in `src/client/index.tsx`. Because the slot is *replaced* rather than extended, a
+> pinned in `src/client/ModelSelect.tsx`. Because the slot is *replaced* rather than extended, a
 > future DSH release that restructures the picker can require re-porting — see
 > [Compatibility](#compatibility--contributions).
 
-**Restart `dsh web` after installing.** The plugin declares a settings namespace on the host half, and host code is only read at boot. After the restart the coverage card appears under **Settings → Plugins → Plugin configuration**.
+**Restart `dsh web` after installing.** The plugin declares a settings namespace on the host half, and host code is only read at boot. After the restart the coverage panel appears on **this plugin's page in the Plugins panel** (sidebar → Plugins → `dsh-peakrate`), together with one editable field: the background refresh interval.
 
 ## What you see
 
@@ -131,9 +131,9 @@ Judgement is made against a curated catalog, so a provider is either **mapped** 
 
 ## What is covered
 
-**Settings → Plugins → Plugin configuration.** It does three jobs: **show coverage**, **surface a silent misconfiguration**, and **refresh the catalog**.
+**Plugins panel → `dsh-peakrate`.** It does four jobs: **show coverage**, **surface a silent misconfiguration**, **edit the refresh interval**, and **refresh the catalog** on demand.
 
-<img src="docs/screenshot-settings-panel.png" width="760" alt="Screenshot: the plugin configuration panel under Settings → Plugins, listing how many models each provider matched" />
+<img src="docs/screenshot-settings-panel.png" width="760" alt="Screenshot: the dsh-peakrate page in the Plugins view, with its editable refresh interval and the per-provider rate table" />
 
 
 | Column | Meaning |
@@ -229,7 +229,7 @@ Fetched catalogs are validated strictly: unknown schema versions, malformed cloc
 |---|---|---|
 | Composer tool row | `conversation.input.left` | additive |
 | Model selector | `conversation.input.model` | **deliberate takeover** (functional superset) |
-| Coverage panel | `settings.plugin.item` | additive, keyed by this plugin's settings namespace |
+| Coverage panel | `plugins.bundle.config` | additive, keyed by the bundle's **npm package name** (`dsh-peakrate`) |
 
 The model-selector takeover ships a complete superset of the official component — keyboard navigation, aria wiring, portal positioning, loading, empty, error and retry states, and the reasoning-effort submenu. The upstream package is MIT and the ported version is recorded in `src/client/index.tsx`; the guard test in `test/bundle-contract.test.ts` fails the build if any *other* shipped-UI slot is ever shadowed.
 
@@ -239,16 +239,16 @@ The model-selector takeover ships a complete superset of the official component 
 
 | | |
 |---|---|
-| **DeepSeek Harness** | `0.1.5-rc.1` on macOS |
+| **DeepSeek Harness** | `0.1.7-rc.2` on macOS |
 | **Install path** | verified end-to-end on a **freshly created profile** using the published npm package (`dsh plugin --profile … add dsh-peakrate`) — bundle registration, the catalog route, all three surfaces and a clean console |
 | **Not yet verified** | other DSH versions; Linux and Windows; profiles that already customise the model selector |
 
 The most likely thing to break is the selector takeover: it replaces a shipped-UI slot, so an
 upstream release that changes the picker's structure needs the port refreshed. The revision the
-port was taken from is recorded in `src/client/index.tsx`.
+port was taken from is recorded in `src/client/ModelSelect.tsx`.
 
 
-- Requires a DeepSeek Harness build providing the `conversation.input.model` and `settings.plugin.item` slots. Upstream selector ported from `@deepseek-ai/dsh-client-ui-model-selection@0.1.5-rc.1`.
+- Requires a DeepSeek Harness build providing the `conversation.input.model` and `plugins.bundle.config` slots. Upstream selector ported from `@deepseek-ai/dsh-client-ui-model-selection@0.1.7-rc.2`.
 - Peer dependencies: `@deepseek-ai/cordis`, `@deepseek-ai/schemastery`.
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/). The changelog follows [Keep a Changelog](https://keepachangelog.com/).
 - **Releases** are cut by pushing a `v*` tag; the [release workflow](./.github/workflows/release.yml) runs typecheck + tests, builds, publishes to npm with provenance, and opens the GitHub Release from `CHANGELOG.md`.

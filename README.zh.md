@@ -31,7 +31,7 @@ dsh-peakrate 读出每个 provider 各自适用的时段规则，算出**此刻*
 - 📋 **模型选择器每一行** —— 切换**之前**就能比价。选型只在这个面板里发生，信息正好落在决策点。
 - 📌 **composer 工具行徽章** —— 当前模型的倍率与倒计时，抬眼可见，不用开菜单。
 - 🔄 **目录实时更新** —— host 半边每 24 小时刷新共享目录，并经**带信任围栏的路由**下发到页面，数据更新**无需重新构建**即可上屏；覆盖面板里一键「立即刷新」。
-- 🔍 **覆盖面板** —— 设置 → 插件里，逐 provider 列出「命中 / 总数 / 未收录的模型」，并对**整组零命中**的 provider 告警。那正是静默漏配的形态，也是本插件**最不愿意隐藏**的东西。
+- 🔍 **覆盖面板** —— 侧栏 **Plugins（插件）** 里本插件详情页上，逐 provider 列出「命中 / 总数 / 未收录的模型」，并对**整组零命中**的 provider 告警。那正是静默漏配的形态，也是本插件**最不愿意隐藏**的东西。
 - 🧭 **`npm run audit`** —— 离线覆盖穷举：枚举运行时的 provider × model，挑出需要人工决策的 provider。
 - 🪶 **零运行时依赖** —— 时间计算只用 `Intl.DateTimeFormat` 与 `Date`，不引入日期库。
 - 🎨 **只用设计 token** —— 颜色来自 harness 自己的 `--dsw-*`，跟随明暗主题。
@@ -74,7 +74,7 @@ dsh plugin --profile web add ./path/to/dsh-peakrate
 > 上游组件为 MIT，移植所依据的版本记录在 `src/client/index.tsx`。由于是**替换**而非扩展，
 > 将来 DSH 若重构该选择器，可能需要重新移植 —— 见[兼容性与贡献](#兼容性与贡献)。
 
-**装完请重启 `dsh web`。** 本插件在 host 半边声明了 settings 命名空间，而 host 代码只在启动时读取。重启后覆盖卡片会出现在 **设置 → 插件 → 插件配置**。
+**装完请重启 `dsh web`。** 本插件在 host 半边声明了 settings 命名空间，而 host 代码只在启动时读取。重启后覆盖面板会出现在 **侧栏 Plugins（插件）→ 本插件详情页**，旁边还有一个可界面编辑的字段：后台刷新间隔。
 
 ## 你会看到什么
 
@@ -128,9 +128,9 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 ## 覆盖情况
 
-**设置 → 插件 → 插件配置**。它承担三件事：**看清覆盖**、**发现漏配**、**刷新目录**。
+**侧栏 Plugins（插件）→ 本插件详情页**。它承担四件事：**看清覆盖**、**发现漏配**、**改刷新间隔**、**按需刷新目录**。
 
-<img src="docs/screenshot-settings-panel.png" width="760" alt="截图：设置 → 插件里的插件配置面板，列出每个 provider 命中了多少个模型" />
+<img src="docs/screenshot-settings-panel.png" width="760" alt="截图：插件面板里 dsh-peakrate 详情页 —— 可编辑的刷新间隔 + 各 provider 覆盖表" />
 
 
 | 列 | 含义 |
@@ -225,9 +225,9 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 |---|---|---|
 | composer 工具行 | `conversation.input.left` | 追加 |
 | 模型选择器 | `conversation.input.model` | **有意接管**（功能超集） |
-| 覆盖面板 | `settings.plugin.item` | 追加，以本插件的 settings 命名空间为 key |
+| 覆盖面板 | `plugins.bundle.config` | 追加，以 **bundle 的 npm 包名**（`dsh-peakrate`）为 key |
 
-模型选择器的接管是官方组件的**完整超集** —— 键盘导航、aria 接线、portal 定位、加载/空/错误/重试态、推理等级二级菜单，一个都不少。上游包是 MIT，移植版本记录在 `src/client/index.tsx` 中；`test/bundle-contract.test.ts` 的守卫测试会在**任何其他自带 UI 槽位**被遮蔽时让构建失败。
+模型选择器的接管是官方组件的**完整超集** —— 键盘导航、aria 接线、portal 定位、加载/空/错误/重试态、推理等级二级菜单，一个都不少。上游包是 MIT，移植版本记录在 `src/client/ModelSelect.tsx` 中；`test/bundle-contract.test.ts` 的守卫测试会在**任何其他自带 UI 槽位**被遮蔽时让构建失败。
 
 ## 兼容性与贡献
 
@@ -235,14 +235,14 @@ model id ─────┘          ├─► profile ─► schedule ─► �
 
 | | |
 |---|---|
-| **DeepSeek Harness** | macOS 上的 `0.1.5-rc.1` |
+| **DeepSeek Harness** | macOS 上的 `0.1.7-rc.2` |
 | **安装路径** | 用**已发布的 npm 包**在一个**新建 profile** 上做过端到端验证（`dsh plugin --profile … add dsh-peakrate`）—— bundle 注册、目录路由、三处呈现、控制台零错误 |
 | **尚未验证** | 其他 DSH 版本；Linux 与 Windows；已经自定义过模型选择器的 profile |
 
 最可能出问题的是**选择器接管**：它替换的是一个 shipped-UI 槽位，因此上游一旦改动选择器结构，
-就需要刷新移植。移植所依据的版本记录在 `src/client/index.tsx`。
+就需要刷新移植。移植所依据的版本记录在 `src/client/ModelSelect.tsx`。
 
-- 需要提供 `conversation.input.model` 与 `settings.plugin.item` 槽位的 DeepSeek Harness 构建。选择器移植自 `@deepseek-ai/dsh-client-ui-model-selection@0.1.5-rc.1`。
+- 需要提供 `conversation.input.model` 与 `plugins.bundle.config` 槽位的 DeepSeek Harness 构建。选择器移植自 `@deepseek-ai/dsh-client-ui-model-selection@0.1.7-rc.2`。
 - peer 依赖：`@deepseek-ai/cordis`、`@deepseek-ai/schemastery`。
 - **提交**遵循 [Conventional Commits](https://www.conventionalcommits.org/)；变更日志遵循 [Keep a Changelog](https://keepachangelog.com/)。
 - **发版**：推一个 `v*` tag 即触发 [release workflow](./.github/workflows/release.yml) —— 跑 typecheck 与测试、构建、带 provenance 发布到 npm，并从 `CHANGELOG.md` 生成 GitHub Release。

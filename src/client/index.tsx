@@ -29,8 +29,13 @@ import {
   liveCatalogStatus,
 } from './live.js'
 import { RateIcon } from './icons.js'
-import { ModelSelect, type DirectoryState } from './ModelSelect.js'
-import { PeakrateSettings } from './SettingsSection.js'
+import { ModelSelect, type DirectoryState, type SelectionOutcome } from './ModelSelect.js'
+import {
+  PeakrateSettings,
+  PeakrateSettingsController,
+  type PeakrateSettingsFields,
+} from './SettingsSection.js'
+import type { SettingsFormScope } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /**
  * 已知会遮蔽自带 UI、但本插件**有意接管**的槽位（附接管理由）。
@@ -214,6 +219,7 @@ export function PeakrateChip(props: ChipProps): React.ReactElement | null {
 
 const NS = 'peakrate-model'
 const zh: Record<string, string> = {
+  'provider.account': 'DeepSeek 账号',
   'trigger.fallback': '选择模型',
   'trigger.loading': '正在加载模型…',
   'trigger.selectAria': '选择模型',
@@ -225,22 +231,18 @@ const zh: Record<string, string> = {
   'effort.providerDefault': 'Default',
   'status.loading': '正在刷新模型列表…',
   'error.action': '模型操作失败：{message}',
+  'error.sessionInUse':
+    '当前会话已被占用，可能是其他正在运行的 DSH 导致的（如其他 dsh web、桌面端），请退出其他正在运行的 DSH 后重试。',
   retry: '重新加载',
   'action.reload': '重新加载',
   'warning.groupLoad': '{name} 加载失败：{message}',
   'empty.models': '没有可用的模型。',
   'empty.efforts': '当前模型未提供推理等级。',
-  // 设置页
-  'settings.title': '模型峰谷倍率',
+  // 配置页（注册在 plugins.bundle.config）
   'settings.desc':
     '按 provider + 模型判定峰谷时段，在模型选择器与 composer 工具行显示倍率与切换倒计时。',
   'settings.coverage': '当前覆盖情况',
-  'settings.rules': '匹配规则',
-  'settings.howto': '如何自定义',
   'settings.colProvider': 'Provider',
-  'settings.colModel': '模型',
-  'settings.colRate': '当前倍率',
-  'settings.colProfile': '命中 profile',
   'period.peak': '峰价',
   'period.offPeak': '谷价',
   'period.campaign': '活动价',
@@ -255,19 +257,24 @@ const zh: Record<string, string> = {
   'settings.refreshing': '刷新中…',
   'settings.sourceFailed': '目录拉取失败（{message}）—— 已回退到内置快照。',
   'settings.colMissing': '未收录的模型',
-  'settings.colTarget': '映射到 / 不映射的理由',
-  'settings.notCovered': '未收录',
   'settings.noSession': '暂无会话，无法读取模型目录（打开一个会话后回到本页即可看到）。',
-  'settings.noSessionShort': '暂无会话数据',
-  'settings.summary': '已覆盖 {covered} / {total} 个模型',
-  'settings.summaryWarn': ' · ⚠ {count} 个 provider 未命中',
-  'settings.noModels': '该 provider 未提供模型。',
   'settings.suspicious': '⚠ {count} 个 provider 完全没有命中',
   'settings.suspiciousHint':
-    '该 provider 下没有任何模型命中 profile。可能是「确实没有峰谷定价」，也可能是「endpoint 未被识别」——若是后者，请用下面的 config 补充 providerAliases。',
-  'settings.rulesDesc': '内置 {profiles} 个 profile、{providers} 条 provider 映射。',
+    '该 provider 下没有任何模型命中 profile。可能是「确实没有峰谷定价」，也可能是「endpoint 未被识别」——若是后者，请在 config 的 providerAliases 里补一条。',
+  // 配置表单（官方 SettingsForm 的分阶段保存）
+  'settings.refreshHours': '后台刷新间隔（小时）',
+  'settings.refreshHoursHint': '0 = 不自动刷新；保存后立即生效，无需重启。',
+  'settings.save': '保存',
+  'settings.saving': '保存中…',
+  'settings.saveFailed': '保存未被接受，请重试。',
+  'settings.formUnavailable': 'Host 没有提供 peakrate 配置命名空间，本页暂时不可编辑。',
+  'settings.readOnly': '当前部署的配置是只读的。',
+  'settings.overridden': '已自定义',
+  'settings.reset': '重置',
+  'settings.invalidNumber': '请输入数字，或留空以恢复默认。',
 }
 const en: Record<string, string> = {
+  'provider.account': 'DeepSeek Account',
   'trigger.fallback': 'Select model',
   'trigger.loading': 'Loading models…',
   'trigger.selectAria': 'Select model',
@@ -279,21 +286,17 @@ const en: Record<string, string> = {
   'effort.providerDefault': 'Default',
   'status.loading': 'Refreshing model list…',
   'error.action': 'Model action failed: {message}',
+  'error.sessionInUse':
+    'This session is already in use, possibly by another running DSH instance (such as dsh web or the desktop app). Quit other running DSH instances and try again.',
   retry: 'Reload',
   'action.reload': 'Reload',
   'warning.groupLoad': '{name} failed to load: {message}',
   'empty.models': 'No models available.',
   'empty.efforts': 'This model provides no reasoning effort.',
-  'settings.title': 'Model peak rates',
   'settings.desc':
     'Judges peak/off-peak per provider + model and shows the rate and countdown in the model selector and the composer tool row.',
   'settings.coverage': 'Current coverage',
-  'settings.rules': 'Matching rules',
-  'settings.howto': 'How to customize',
   'settings.colProvider': 'Provider',
-  'settings.colModel': 'Model',
-  'settings.colRate': 'Current rate',
-  'settings.colProfile': 'Matched profile',
   'period.peak': 'Peak',
   'period.offPeak': 'Off-peak',
   'period.campaign': 'Campaign',
@@ -308,17 +311,20 @@ const en: Record<string, string> = {
   'settings.refreshing': 'Refreshing…',
   'settings.sourceFailed': 'Catalog fetch failed ({message}) — fell back to the bundled snapshot.',
   'settings.colMissing': 'Not covered',
-  'settings.colTarget': 'Mapped to / reason for skipping',
-  'settings.notCovered': 'not covered',
   'settings.noSession': 'No session yet — open one and come back to read the model directory.',
-  'settings.noSessionShort': 'No session data',
-  'settings.summary': '{covered} / {total} models covered',
-  'settings.summaryWarn': ' · ⚠ {count} provider(s) unmatched',
-  'settings.noModels': 'This provider exposes no models.',
   'settings.suspicious': '⚠ {count} provider(s) matched nothing at all',
   'settings.suspiciousHint':
-    'No model under this provider matched a profile. It may genuinely have no time-based pricing, or its endpoint is unrecognized — if the latter, add a providerAliases entry below.',
-  'settings.rulesDesc': '{profiles} bundled profile(s), {providers} provider mapping(s).',
+    'No model under this provider matched a profile. It may genuinely have no time-based pricing, or its endpoint is unrecognized — if the latter, add a providerAliases entry in the config.',
+  'settings.refreshHours': 'Background refresh interval (hours)',
+  'settings.refreshHoursHint': '0 disables auto-refresh; a save applies immediately, with no restart.',
+  'settings.save': 'Save',
+  'settings.saving': 'Saving…',
+  'settings.saveFailed': 'The save was not accepted — try again.',
+  'settings.formUnavailable': 'The Host serves no peakrate configuration namespace, so this page cannot be edited.',
+  'settings.readOnly': 'This deployment stores configuration read-only.',
+  'settings.overridden': 'Overridden',
+  'settings.reset': 'Reset',
+  'settings.invalidNumber': 'Enter a number, or clear the field to restore the default.',
 }
 
 /**
@@ -350,6 +356,27 @@ interface ClientScope {
   }
 }
 
+/** slot 注册面（结构子集，避免依赖官方包的类型）。 */
+interface ClientSlots {
+  inject: (key: string, cb: () => () => void) => void
+  register: (options: Record<string, unknown>, component: unknown) => () => void
+}
+
+/**
+ * client 侧配置表单服务（`@deepseek-ai/dsh-client-ui-settings` 的 `ConfigForms`）。
+ *
+ * `get(entryId)` 的 entryId **就是** host 配置命名空间（0.1.7 起二者恒等）。
+ */
+interface SettingsFormsLike {
+  get: (namespace: string) => unknown
+}
+
+/**
+ * host 侧配置命名空间 —— 等于 profile 里那条 loader entry 的 `id`
+ * （`cordis.patch.yml` 的 `- id: peakrate`），也就是 `settings.describe()` 的 `ns`。
+ */
+const SETTINGS_NAMESPACE = 'peakrate'
+
 /**
  * client 插件入口：注册工具行徽章 + fork 的模型选择器。
  *
@@ -364,7 +391,22 @@ interface ClientScope {
 export function apply(ctx: Context): void {
   injectStyles()
 
-  ctx.inject(['slots', 'sessions', 'modelDirectories', 'locale'], (injected) => {
+  // 本插件自己的文案命名空间（locale 不可用时回退内置中文，不影响功能）。
+  // 只注册一次，两处注册面共用同一个 `t`。
+  let t: (key: string, params?: Record<string, unknown>) => string = (key, params) =>
+    translate(zh, key, params)
+  ctx.inject(['locale'], (injected) => {
+    const locale = (injected as unknown as ClientScope).locale
+    if (locale === undefined) return
+    try {
+      locale.register(NS, { zh, en })
+      t = locale.bind(NS)
+    } catch {
+      /* 回退到内置中文 */
+    }
+  })
+
+  ctx.inject(['slots', 'sessions', 'modelDirectories'], (injected) => {
     const scope = injected as unknown as ClientScope
 
     const slots = scope.slots as
@@ -385,7 +427,7 @@ export function apply(ctx: Context): void {
               provider: string
               model: string
               reasoningEffort?: string
-            }) => Promise<void>
+            }) => Promise<SelectionOutcome>
           }
         }
       | undefined
@@ -394,19 +436,6 @@ export function apply(ctx: Context): void {
       | undefined
 
     if (slots === undefined || models === undefined || sessions === undefined) return
-
-    // 本插件自己的文案命名空间（locale 不可用时回退内置中文，不影响功能）
-    let t: (key: string, params?: Record<string, unknown>) => string = (key, params) =>
-      translate(zh, key, params)
-    const locale = scope.locale
-    if (locale !== undefined) {
-      try {
-        locale.register(NS, { zh, en })
-        t = locale.bind(NS)
-      } catch {
-        /* 回退到内置中文 */
-      }
-    }
 
     // 启动即拉一次运行时目录（host 每 24h 拉取，经带围栏的 /peakrate/catalog 下发）。
     // 不阻塞首屏：拉不到就静默用构建期内置快照。
@@ -434,25 +463,7 @@ export function apply(ctx: Context): void {
       ),
     )
 
-    // ② 插件卡片：出现在「设置 → 插件 → 插件配置」。
-    //    keyed 槽位按 **Host 提供的 settings 命名空间** 派发 key，因此 key 必须是
-    //    我们自己的命名空间名（`peakrate`，在 settings.yaml 里）。
-    slots.inject('settings.plugin.item', () =>
-      slots.register(
-        {
-          name: 'settings.plugin.item',
-          key: 'peakrate',
-          inject: () => ({
-            peakrate: DEFAULT_FACE,
-            modelDirectories: models,
-            t,
-          }),
-        },
-        PeakrateSettings,
-      ),
-    )
-
-    // ③ fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
+    // ② fork 的模型选择器：single 槽位，功能超集（见 ModelSelect.tsx）
     slots.inject('conversation.input.model', () =>
       slots.register(
         {
@@ -478,17 +489,53 @@ export function apply(ctx: Context): void {
                 reasoningEffort?: string
               }) =>
                 available
-                  ? directory.select(selection).then(
-                      () => true,
-                      () => false,
-                    )
-                  : Promise.resolve(false),
+                  ? // ★ 原样透传官方的 `RemoteResult`（`{ ok, value } | { ok, error: { code, message } }`）。
+                    //   压成 boolean 会丢掉 `error.code`，`session/writer-held`
+                    //   这类专用文案就再也判不出来了。
+                    directory.select(selection)
+                  : Promise.resolve(undefined),
               peakrate: DEFAULT_FACE,
               t,
             }
           },
         },
         ModelSelect,
+      ),
+    )
+  })
+
+  // ③ 配置页：**单独一个 inject 面**。
+  //
+  // 刻意不把 `configForms` 并进上面那个作用域：`ctx.inject` 会等**所有**声明的
+  // 服务就绪，把配置面的依赖混进去，一旦 settings 半边缺失，徽章与模型选择器的
+  // 注册会被一起拖住 —— 那是「一个次要面拖垮核心面」。
+  ctx.inject(['slots', 'configForms', 'modelDirectories', 'sessions'], (injected) => {
+    const scope = injected as unknown as ClientScope & { configForms?: SettingsFormsLike }
+    const slots = scope.slots as ClientSlots | undefined
+    const configForms = scope.configForms
+    if (slots === undefined || configForms === undefined) return
+
+    const controller = new PeakrateSettingsController(
+      configForms.get(SETTINGS_NAMESPACE) as SettingsFormScope<PeakrateSettingsFields>,
+    )
+    ctx.effect(() => () => controller.dispose(), 'peakrate: settings form')
+
+    slots.inject('plugins.bundle.config', () =>
+      slots.register(
+        {
+          name: 'plugins.bundle.config',
+          // ★ key = **npm 包名**（`dsh-peakrate`），不是 host 配置命名空间
+          //   （`peakrate`）：该槽位按「bundle 的包名」派发，见 ui-plugin-manager
+          //   的 slot-contract。
+          key: 'dsh-peakrate',
+          inject: () => ({
+            ...controller.inject(),
+            peakrate: DEFAULT_FACE,
+            modelDirectories: scope.modelDirectories,
+            t,
+          }),
+        },
+        PeakrateSettings,
       ),
     )
   })

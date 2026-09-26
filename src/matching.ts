@@ -125,6 +125,12 @@ export const DEFAULT_MODEL_MAPPINGS: ModelMapping[] = [
 export const UNMATCHED_BY_DESIGN: Record<string, string> = {
   'ocg-1-chat':
     '仅提供 omen-alpha 等非峰谷计价模型（OpenCode Go 的 chat 通道），无对应 profile。',
+  'opencode-go-chat':
+    'OpenCode Go 的 chat 通道（Zen 网关模型：MiMo V2.6 Flash / GLM 5.3 Flash / Space Bunny Free 等）——' +
+    'Zen 按 token **平价**结算，价目表只有 input/output/cached 单价、**没有 peak/off-peak 条目**' +
+    '（其中 Space Bunny Free、MiMo Free 还是限免模型），即上游本身没有时段倍率可继承。' +
+    '依据：https://opencode.ai/docs/zen/ 的 Pricing 表（2026-09-26 核对）。' +
+    '注意与 `opencode-go` 区分：那是 Go 编码套餐，其 DeepSeek V4 系**有**峰谷，已映射到 DeepSeek profile。',
   'openrouter':
     '聚合网关，同一 baseURL 服务数十家厂商，「provider 级」时段规则不成立；' +
     '需按具体模型判定，暂不映射（如将来数据源收录其转售价目再议）。',

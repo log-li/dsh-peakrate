@@ -14,8 +14,27 @@ import { parseCatalog, type ParsedCatalog } from './catalog.js'
 import { handleCatalogRequest, type CatalogPayload } from './catalog-route.js'
 import type { MatchConfig, RateProfile } from './matching.js'
 
-/** 插件配置（spec §6）。 */
-export interface Config {
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * `volatile()` 配置值已提交进运行中的 fiber（**不重挂**插件），只派发给
+     * 拥有该 entry 的那个 fiber。
+     *
+     * 这条声明的正式来源是 `cordis-plugin-loader`（DSH 运行时自带），但它不在本
+     * 插件的依赖图里，所以这里按**同一签名**补一条，好让 `ctx.on` 通过类型检查。
+     *
+     * @param paths - 变更的配置路径（键数组）。
+     * @mode emit
+     */
+    'loader/volatile-update'(paths: readonly (readonly string[])[]): void
+  }
+}
+
+/**
+ * 用户配置的**明文形态**（spec §6）—— 写在 profile 的 `cordis.patch.yml`
+ * （或 `settings.yaml`）那条 entry 的 `config:` 下。
+ */
+export interface PeakrateOptions {
   /** 总开关。 */
   enabled?: boolean
   /** 后台刷新间隔（小时）；0 = 不自动刷新。 */
@@ -32,30 +51,112 @@ export interface Config {
   customProfiles?: unknown[]
 }
 
+/**
+ * `volatile()` 字段在运行时的形态：一个**稳定引用**（`get()` 取当前明文值）。
+ *
+ * 刻意不 import `@deepseek-ai/cordis` 的 `Volatile`：本机的 cordis 是
+ * `^4.0.2`，而该类型是后来才导出的，用本地结构类型能让 peer 版本更宽松。
+ */
+export interface VolatileRef<T> {
+  get: () => T
+}
+
+/**
+ * 校验之后交给 `apply` 的**运行时配置**：`volatile()` 的字段是
+ * {@link VolatileRef} 引用，其余是标量。
+ *
+ * 名字与官方 cookbook（`docs/cookbook/adding-a-settings-card.md`）一致：**同一个
+ * 模块同时导出 `interface Config`（运行时形态）与 `const Config`（schema）** ——
+ * 类型空间与值空间互不冲突，前者给插件读、后者给 loader 校验与设置面派发。
+ */
+export interface Config {
+  enabled?: boolean
+  refreshIntervalHours?: VolatileRef<number | undefined>
+  cachePath?: string
+  catalogUrl?: string
+  providerAliases?: Record<string, string>
+  modelMappings?: MatchConfig['modelMappings']
+  customProfiles?: unknown[]
+}
+
 const DEFAULT_CATALOG_URL = 'https://offpeakclock.com/pricing.json'
 const DEFAULT_REFRESH_HOURS = 24
 
 /**
- * 本插件在**用户设置**里的命名空间。
+ * 插件配置 schema —— ★ **这就是 0.1.7 的「设置命名空间注册」**。
  *
- * 它同时解决两件事：
- * 1. **「设置 → 插件 → 插件配置」里的卡片**：该页签按 Host 提供的 settings
- *    命名空间派发 slot key，没有命名空间 → 客户端卡片注册了也**不会渲染**
- *    （实测确认：光在 settings.yaml 加一个顶层 key 不被 serve，必须
- *    `settings.installSection(...)`）。
- * 2. **配置可在界面里编辑**：不必再手改 `cordis.patch.yml`。
+ * DSH 0.1.7 删除了 `settings.installSection(...)` 那套安装 API（0.1.5 时代的
+ * 写法）：现在**模块导出的 `Config` 就是唯一的注册路径** ——
+ * `settings.describe()` 取的是 `entry.fiber.runtime.Config`，命名空间就等于
+ * profile 里这条 loader entry 的 `id`（即 `peakrate`，见 `cordis.patch.yml`）。
  *
- * 只暴露 host 侧**能真正生效**的项；别名/映射等复杂结构仍留在 loader config。
+ * 标了 `volatile()` 的字段是**可在界面里即时编辑**的（无需重载插件）：schema
+ * 校验会把它解析成一个**稳定引用**，用户保存后由 loader 直接把新值写进该引用，
+ * 并向本插件发出 `loader/volatile-update`。官方同款做法见 `llm-deepseek`。
+ *
+ * 只标 `refreshIntervalHours`：`enabled` 是总开关，改它要重建 store 与下发路由，
+ * 属于「重新装载」语义（loader 会重挂本插件），标成 volatile 反而给出
+ * 「已生效」的错觉。
  */
-const SETTINGS_NAMESPACE = 'peakrate'
-
-/** 暴露给设置 UI 的 schema —— 两项都 host 侧可即时生效。 */
-const SETTINGS_SCHEMA = z.object({
-  /** 总开关；关闭后不再后台刷新（客户端呈现暂不受其影响）。 */
+export const Config = z.object({
+  /** 总开关；关闭后本半边不做事（改它需要重新装载）。 */
   enabled: z.boolean().default(true),
   /** 后台刷新间隔（小时）；0 = 不自动刷新。 */
-  refreshIntervalHours: z.number().default(DEFAULT_REFRESH_HOURS),
+  refreshIntervalHours: z.number().min(0).max(720).default(DEFAULT_REFRESH_HOURS).volatile(),
+  /** 本地缓存路径；留空则用 $DSH_HOME/dsh-peakrate/pricing.json。 */
+  cachePath: z.string(),
+  /** 数据源地址，可换镜像/自建。 */
+  catalogUrl: z.string(),
+  /** provider 别名覆盖。 */
+  providerAliases: z.dict(z.string()),
+  /** 模型归属覆盖。⚠ 字段必须与 `ModelMapping` 一一对应（`z.object` 会**丢掉**
+   * 未声明的键 —— 漏了 `matchIsRegex` 就等于静默忽略用户写下的正则开关）。 */
+  modelMappings: z.array(
+    z.object({
+      provider: z.string(),
+      match: z.string(),
+      profile: z.string(),
+      matchIsRegex: z.boolean(),
+    }),
+  ),
+  /** 自定义 profile：新增或按 id 覆盖内置快照条目。 */
+  customProfiles: z.array(z.any()),
 })
+
+/**
+ * 读一个配置字段：`volatile` 引用取 `.get()`，标量原样返回。
+ *
+ * @param value - 运行时配置字段。
+ * @returns 当前明文值。
+ */
+function readRef<T>(value: VolatileRef<T> | T | undefined): T | undefined {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as VolatileRef<T>).get === 'function'
+  ) {
+    return (value as VolatileRef<T>).get()
+  }
+  return value as T | undefined
+}
+
+/**
+ * 从运行时配置里读出**当前**明文选项（`volatile` 字段每次都重新取）。
+ *
+ * @param config - 校验后的运行时配置。
+ * @returns 明文选项。
+ */
+export function readOptions(config: Config): PeakrateOptions {
+  return {
+    enabled: config.enabled,
+    refreshIntervalHours: readRef(config.refreshIntervalHours),
+    cachePath: config.cachePath,
+    catalogUrl: config.catalogUrl,
+    providerAliases: config.providerAliases,
+    modelMappings: config.modelMappings,
+    customProfiles: config.customProfiles,
+  }
+}
 
 /** 内置快照路径（随包分发，安装即用、离线可用）。 */
 function snapshotPath(): string {
@@ -113,7 +214,7 @@ export class CatalogStore {
   private readonly catalogUrl: string
 
   constructor(
-    private readonly config: Config,
+    private readonly config: PeakrateOptions,
     logger: { info?: (msg: string) => void; warn?: (msg: string) => void } | undefined,
   ) {
     this.log = (msg) => logger?.info?.(`[peakrate] ${msg}`)
@@ -263,7 +364,7 @@ export class CatalogStore {
   /**
    * 改后台刷新间隔并立即生效（0 = 停止自动刷新）。
    *
-   * 供用户设置里修改 `refreshIntervalHours` 时调用。
+   * 供界面里修改 `refreshIntervalHours`（volatile 字段）时调用。
    *
    * @param hours - 新间隔（小时）。
    */
@@ -271,6 +372,11 @@ export class CatalogStore {
     this.stopAutoRefresh()
     this.config.refreshIntervalHours = hours
     this.startAutoRefresh()
+  }
+
+  /** 当前生效的后台刷新间隔（小时）。 */
+  refreshInterval(): number {
+    return this.config.refreshIntervalHours ?? DEFAULT_REFRESH_HOURS
   }
 
   /** 启动后台刷新（refreshIntervalHours = 0 时不启动）。 */
@@ -303,16 +409,17 @@ export class CatalogStore {
  * 插件主体：建立 CatalogStore，注册为 cordis 服务，并按配置启动刷新。
  *
  * @param ctx - cordis 上下文。
- * @param config - 插件配置。
+ * @param config - 校验后的运行时配置（`volatile` 字段是稳定引用）。
  */
 export function apply(ctx: Context, config: Config = {}): void {
-  if (config.enabled === false) return
+  const options = readOptions(config)
+  if (options.enabled === false) return
 
   const logger = ctx.get('logger') as
     | { info?: (msg: string) => void; warn?: (msg: string) => void }
     | undefined
 
-  const store = new CatalogStore(config, logger)
+  const store = new CatalogStore(options, logger)
   store.load()
 
   // 提供 host 侧服务，client 半边通过同名 service 读取。
@@ -322,8 +429,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     updatedAt: () => store.updatedAt(),
     refresh: () => store.refresh(),
     config: () => ({
-      providerAliases: config.providerAliases ?? {},
-      modelMappings: config.modelMappings ?? [],
+      providerAliases: options.providerAliases ?? {},
+      modelMappings: options.modelMappings ?? [],
     }),
   })
 
@@ -333,34 +440,20 @@ export function apply(ctx: Context, config: Config = {}): void {
   // 启动后异步拉一次，不阻塞启动
   void store.refresh()
 
-  // 声明用户设置命名空间：既让「设置 → 插件」的卡片得以渲染，
-  // 也让这两项配置可在界面里编辑。
-  let live = {
-    enabled: config.enabled ?? true,
-    refreshIntervalHours: config.refreshIntervalHours ?? DEFAULT_REFRESH_HOURS,
-  }
-  /** 安装时由 `setSource` 交接的「当前用户设置」读取器；每次变更后按需重读。 */
-  let readSettings: (() => Record<string, unknown>) | undefined
   /**
-   * 把最新设置应用到运行中的 store。
+   * 界面里改了 volatile 字段（`refreshIntervalHours`）：loader 会把新值写进
+   * 那个**稳定引用**，并向**本插件 fiber** 发一次 `loader/volatile-update`。
+   * 事件不带值，所以这里重新 `readOptions(config)` 取当前值。
    *
-   * 只处理**真正能即时生效**的两项：开关与刷新间隔。其余配置（别名/映射/
-   * 自定义 profile）结构复杂且需重建快照，仍留在 `cordis.patch.yml`。
+   * 这就是 0.1.7 之后「配置项可在界面里编辑并即时生效」的接线方式 ——
+   * 替代了 0.1.5 时代那套 `setSource`（只交接一次）/`onChange` 契约。
    */
-  const applySettings = (next: typeof live): void => {
-    const enabledChanged = next.enabled !== live.enabled
-    const intervalChanged = next.refreshIntervalHours !== live.refreshIntervalHours
-    live = next
-    if (!enabledChanged && !intervalChanged) return
-
-    if (!next.enabled) {
-      store.stopAutoRefresh()
-      logger?.info?.('[peakrate] 已按用户设置停用后台刷新')
-      return
-    }
-    store.setRefreshInterval(next.refreshIntervalHours)
-    logger?.info?.(`[peakrate] 后台刷新间隔已更新为 ${next.refreshIntervalHours} 小时`)
-  }
+  ctx.on('loader/volatile-update', () => {
+    const hours = readOptions(config).refreshIntervalHours ?? DEFAULT_REFRESH_HOURS
+    if (hours === store.refreshInterval()) return
+    store.setRefreshInterval(hours)
+    logger?.info?.(`[peakrate] 后台刷新间隔已更新为 ${hours} 小时`)
+  })
 
   // ── 把 host 运行时拉取到的目录下发给浏览器 ──────────────────────────────
   // 在此之前 client 只吃构建期烤进 bundle 的快照，host 的 24h 拉取没有任何消费者
@@ -417,36 +510,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     })
     ctx.effect(() => dispose, 'peakrate: catalog route')
     logger?.info?.('[peakrate] 已挂载 /peakrate/catalog（带信任围栏）')
-  })
-
-  ctx.inject(['settings'], (settingsCtx: Context) => {
-    const settings = (settingsCtx as unknown as { settings?: {
-      installSection: (
-        owner: Context,
-        ns: string,
-        schema: unknown,
-        entry: Record<string, unknown>,
-        hooks: {
-          setSource: (source: () => Record<string, unknown>) => void
-          onChange: () => void
-        },
-      ) => void
-    } }).settings
-    if (settings === undefined) return
-    // 契约（2026-09-12 实测探针确认）：`setSource` **只在安装时交接一次读取器**，
-    // 此后用户每次编辑只触发 `onChange`，**不会**再调 `setSource`。
-    // 因此必须「存读取器 + 在 onChange 里自己再拉一次」——
-    // 官方两个使用方（dsh-agent-loop / dsh-tool-subagent）同样是存 reader 按需读。
-    // 早期写法在 setSource 里一次性取值、onChange 留空 → 用户编辑到不了运行中的 store。
-    settings.installSection(ctx, SETTINGS_NAMESPACE, SETTINGS_SCHEMA, live, {
-      setSource: (source) => {
-        readSettings = source
-        applySettings(readSettings() as typeof live)
-      },
-      onChange: () => {
-        if (readSettings !== undefined) applySettings(readSettings() as typeof live)
-      },
-    })
   })
 }
 

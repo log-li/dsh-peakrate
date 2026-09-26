@@ -1,8 +1,8 @@
 # dsh-peakrate — composer 工具行内的峰谷倍率指示插件
 
-Status: implemented（已装机 web profile，实机验证通过 2026-09-12）
+Status: implemented（**0.1.7-rc.2** 重基线完成并隔离实例端到端验证通过，2026-09-26）
 创建于: 2026-09-11
-最近更新: 2026-09-12
+最近更新: 2026-09-26
 包名: `dsh-peakrate`
 
 > **本文档为活文档**：描述本插件**现在是什么样**，随设计迭代滚动更新。
@@ -152,8 +152,12 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 | `xiaomi-token-plan-cn` | 该 provider 下的模型 | `xiaomi-mimo-v2-5-token-plan` | Asia/Shanghai 每天 08:00-00:00 · 1× / 0.8× credits |
 
 **不显示**：`ollama` 下的 glm-5.3 / glm-5.3-flash / glm-5.2 / minimax-m3 / kimi-k3、
-`ocg`·`opencode-go`·`ocg-1` 的 deepseek 系、`ocg-1-chat` 的 omen-alpha、
+`ocg-1-chat` 的 omen-alpha、`opencode-go-chat` 的 MiMo / GLM / Space Bunny（Zen 平价结算，
+无峰谷可继承 —— 2026-09-26 覆盖审计补记，依据 <https://opencode.ai/docs/zen/> 的 Pricing 表）、
 `openrouter` 的 stealth/ox-alpha。
+
+> 注意：`ocg`·`opencode-go`·`ocg-1` 的 **DeepSeek 系是显示**的（转售继承上游峰谷，见 §4.1）；
+> 不显示的是它们的 **chat** 通道 —— 两者名字相近但定价模型完全不同。
 
 ### 4.4 防静默遗漏机制（2026-09-12 新增）
 
@@ -202,6 +206,77 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 **保留** §5.1 的可加性徽章（`conversation.input.left`）：它是**免开菜单的随手可见**，
 与本方案的「菜单内逐行对比」互补，不重复。
 
+### 5.0.1 DSH 0.1.7-rc.2 适配审计（2026-09-25 审计 → 2026-09-26 实现并验证）
+
+**审计基线**：DSH 源码 `dsh-v0.1.7-rc.2`（HEAD `477b4f4`）、官方 Desktop App `0.1.7-rc.2`，以及本机 `dsh-peakrate` `0.2.2` 的源码与构建产物。当前结论是：**Peakrate 的 host bundle 能被 Desktop inventory 看到并启用，但 client 选择器尚未证明兼容 0.1.7-rc.2；在完成本节的重基线与浏览器 E2E 前，不得把“bundle enabled”写成“UI verified”。**
+
+#### 已确认的硬阻塞
+
+| 位置 | 0.1.7-rc.2 事实 | Peakrate 0.2.2 现状 | 风险 |
+|---|---|---|---|
+| 客户端 primitive 导出 | 官方 selector 使用 `Icon*OutlineRegular`、`MenuSurface`、`StateDot`、`Toast`；安装的 `dsh-client-ui-primitives` 不再导出旧的 `Icon*Outline16/14` | `ModelSelect.tsx` 与 `SettingsSection.tsx` 仍 import 旧名称，`lib/client.js` 也保留旧引用 | client bundle 加载或首次渲染时得到 `undefined` 图标，核心选择器可能整块失败 |
+| 模型目录状态 | `ModelDirectoryState` 新增/明确 `routable`、`retainedEffort`、`pending`；官方用 `pending !== null` 判定 busy，并在选中模型暂不可用时保留 effort 文案 | 本地 `DirectoryState` 只有较旧的字段；busy 主要看 `status === 'selecting'` | 选择中反馈、不可用模型的 effort、目录刷新边界与官方不一致 |
+| 选择结果 | 官方 `select()` 返回 `Promise<RemoteResult<void> | undefined>`，错误保留 `error.code/message`，并处理 `session/writer-held` | 本地注入面把它压成 `Promise<boolean>`，再用目录错误文本兜底 | 丢失官方错误语义；可能把失败显示成普通 toast 或错误关闭菜单 |
+| Provider 排序 | 官方对 `state.groups` 做 `toSorted`，固定 `deepseek-account`、`deepseek-official`、其他 provider 的顺序 | fork 直接按 `state.groups` 遍历 | Desktop/Web 的目录顺序可能与官方不同，回归对照无法成立 |
+| 设置卡片 slot | 0.1.7-rc.2 的 Plugin Manager 使用 `plugins.item`、`plugins.bundle.config`、`plugins.row.config`；bundle 配置 key 是 npm 包名 | 仍注册 `settings.plugin.item`，且使用旧的 `settings.installSection` 契约 | 0.1.7 没有该旧 slot/安装 API 时，卡片不渲染或注册链断裂 |
+| host 设置写入 | 当前设置面使用 `configForms` / `settings.mutate` 与 revision fencing | host 仍按旧 `installSection(setSource/onChange)` 形态维护 `live` | 配置编辑、保存、冲突处理不能直接沿用旧实现 |
+
+#### 结论与目标实现
+
+1. **不要在旧 fork 上做“换图标名 + 改几个字段”的增量修补。** 先以 0.1.7-rc.2 官方 `dsh-client-ui-model-selection` 的 `ModelSelect.tsx`、`directory.ts`、`slots.ts` 和 `index.ts` 为基线重做移植，再只叠加 Peakrate 的行内倍率/倒计时增量。这样才能保留官方的 `MenuSurface` 定位、键盘与焦点、`aria-*`、loading/error/retry、pending 行内 spinner、不可用模型处理、`RemoteResult` toast、`routable/retainedEffort` 和 provider 排序。
+2. **状态与选择契约必须整体升级**：`DirectoryState` 对齐官方 `ModelDirectoryState`（至少补 `routable`、`retainedEffort`、`pending`）；`select()` 保留 `RemoteResult<void> | undefined`，不要转成 boolean；`busy` 以 `pending` 为准；effort 标签在当前模型暂时不在目录时使用 `retainedEffort`。
+3. **重做设置载体**：把 `settings.plugin.item` / `installSection` 迁移到当前 Plugin Manager 的 `plugins.bundle.config`，key 使用 bundle 包名 `dsh-peakrate`（不是 host 配置 namespace `peakrate`）。页面按当前 `PluginConfigViewProps` 的 `view: 'summary' | 'page'` 与 `form` 契约渲染；Host 配置写入改走当前 `configForms`/`settings.mutate` 与 revision fence。`peakrate` namespace 仍可作为 host schema 的配置 id，但不能再把它误当成 UI slot key。
+4. **保留 CJS loader，但重新核对 module graph**：当前 `dsh-client-modules` 仍以 `window.__ModuleLoader__.load({ id, factory })` 的 CJS factory 加载普通 client bundle，因此现有 wrapper 方向正确；重基线时必须逐项核对 `@deepseek-ai/*` baseline/external、chunk、factory 导出和 source map，不以 0.1.5 的 externals 清单为契约。
+5. **区分 normal bundle 与 dynamic runner 的 priority 规则**：当前 `ui-slots` 的静态 slot core 仍支持显式 shadow priority，`conversation.input.model` 也仍是 `single` + `shadows-shipped-ui`；普通 `dsh-client-modules` bundle 应继续验证/保留 `priority: -1`。只有真正经 `cordis-client-runner` 动态装载的 package 才适用其“自动分配更低 priority、不要手传 priority”的规则，不能把两条 lane 混写。
+6. **功能超集门禁**：重基线后的替换器必须逐项通过官方 0.1.7-rc.2 的模型选择、effort 选择、pending/失败 toast、键盘导航、portal/滚动/缩放定位、外部点击与失焦关闭、无 Session/子代理隐藏行为；在此之上再验证每个模型行的倍率徽章、当前模型倒计时、无匹配模型不渲染，以及 composer 工具行的追加徽章。
+
+#### 迁移与验证顺序
+
+1. 在隔离 profile 用 0.1.7-rc.2 官方包建立“官方 selector-only”基线，记录真实 DOM、键盘路径、网络请求与 console/pageerror。
+2. 重基线 Peakrate client bundle；先跑 typecheck、构建产物契约和纯函数测试，再跑隔离浏览器 E2E；不通过前不写入 Desktop profile。
+3. 迁移设置卡片到 `plugins.bundle.config`，验证 bundle 页面能打开、配置可保存、revision 冲突不会覆盖新值；再验证 `peakrate` host namespace 的 live config 与页面显示一致。
+4. 最后才在 Web 与官方 Desktop profile 启用；两边都用独立 profile、独立锁文件/依赖图和可回滚备份。Desktop host inventory 通过不等于 client E2E 通过，必须分别记录。
+5. 失败时优先退回只注册 `conversation.input.left` 的追加式徽章，暂时不注册 `conversation.input.model`；不得以一个残缺替换器继续遮蔽官方核心 UI。
+
+**本节状态（2026-09-26 更新）：已实现并验证。**
+
+- **六条硬阻塞全部证实为真**（逐条对照 `dsh-v0.1.7-rc.2` 源码），且**在上线前就已实际爆发**：
+  用户 web profile（0.1.7-rc.2）的启动日志里是
+  `TypeError: settings.installSection is not a function`（host fiber 加载失败），
+  client 侧则因旧图标名在 render 期得到 `undefined`。旧版 `0.2.2` 在 0.1.7 上是**坏的**。
+- **两处措辞需修正（审计结论仍是「要重基线」，只是理由更准确）**：
+  1. 「安装的 `dsh-client-ui-primitives` 不再导出旧名」——该包**并不作为独立目录安装**：
+     DSH 前端 shell（`dsh-web-frontend` 的产物）把它注册为 baseline 模块，client 插件在
+     运行时按名 require。事实不变（`Icon*Outline16/14` 在 0.1.7 的导出面上为 0），
+     但排查时不要去找那个目录。
+  2. 「`DirectoryState` 至少补 `routable`」——**composer 座并不读 `routable`**（官方也只有
+     `/model` 弹窗消费它）。本插件不 fork 弹窗，故只补 `retainedEffort` 与 `pending` 即可；
+     声明用不到的字段只会掩盖真实依赖面。
+- **验证证据（隔离 profile `peakrate-test`，0.1.7-rc.2，端口 3099，Playwright 无头）**：
+  ① `pageerror` / `console error` **均为 0**；
+  ② fork 的选择器正常渲染并打开（根面板两项 → 钻进模型列表）；
+  ③ 每行倍率徽章正确（`DeepSeek-V41-Flash 1× · 1d 19h`、`MiMo-V2.5 1× credits · 10h 12m`、
+     `GLM 5.3 Flash 0.5× · 9h 12m`），未匹配行（`ox-alpha` / `Kimi K3` / chat 通道模型）**什么都不显示**；
+  ④ **真的切了模型**：点 `DeepSeek-V41-Flash` → 触发器由 `Space Bunny Free` 变为
+     `DeepSeek-V41-Flash`，composer 工具行随即出现徽章 `1× · 1d 19h`（追加式呈现与 fork 互补，实测成立）；
+  ⑤ 同一时刻不同时区的倒计时**各自不同**：DeepSeek（Asia/Shanghai）`1d 19h` vs
+     Ollama（UTC）`2d 6h` vs xiaomi（北京时每日）`10h 12m` —— 这是本插件区别于 DeepSeek 专用插件的核心证据；
+  ⑥ 配置页：`[data-plugin-config]` 区渲染、`#dsh-peakrate-refresh-interval` 字段可编辑、
+     覆盖表 9 行且**无 ⚠ 告警**、`Save` / `Refresh now` 可用。
+- **交付前「覆盖穷举」审计抓到一处真实缺口（已修）**：实机覆盖表把 `opencode-go-chat`
+  标成「整组零命中且无理由」——即 2026-09-12 那条教训的同一形态（缺少决策 = 静默漏配）。
+  查证 `https://opencode.ai/docs/zen/` 的 Pricing 表：Zen 按 token **平价**结算、没有
+  peak/off-peak 条目（含限免 stealth 模型），即**上游本身没有时段倍率可继承** →
+  按流程写入 `UNMATCHED_BY_DESIGN`（附依据链接与「与 `opencode-go` 的区别」说明），
+  复查后告警归零。
+- **仍属未跑/未证的边界**（如实记录，不默认没问题）：
+  - 配置页的**保存写盘**未在本环境验证：隔离 profile 的首启告示 ack 写不进去
+    （`The acknowledgement could not be saved`），说明该 profile 的配置文档写入受限；
+    因此「改数值 → Save → 落盘 → 重载仍在」这条链**只验到字段可编辑与控件存在**。
+  - Web 中文界面下的文案未在本次 E2E 截图取证（仅英文界面取证）；双语键集由
+    `test/i18n.test.ts` 静态强制。
+  - 官方 Desktop App（`0.1.7-rc.2`）与 Linux/Windows 未验证。
+
 ### 5.1 载体（历史）：**可加性槽位，不遮蔽自带 UI**（2026-09-12 首次修订）
 
 **原方案「替换模型选择器」已被否决并废弃。** 理由（实机事故）：
@@ -245,48 +320,33 @@ composer 工具行左侧（紧邻模型选择器），用**自己的 id** 做纯
 完整目标态（`Xh 后切换，转为 <时段名>（<徽章>）`）放在 tooltip 里。
 - 每 30 秒重算一次，保证倒计时新鲜
 
-### 5.4 插件配置卡片（`settings.plugin.item`，追加式、可展开）
+### 5.4 插件配置区（`plugins.bundle.config`，追加式，2026-09-26 随 0.1.7 重做）
 
-**2026-09-12 最终方案**：面板呈现为**「设置 → 插件 → 插件配置」里的可展开卡片**，
-与官方那几张（终端 / Agent 循环 / Subagent / 网页搜索）并列。
+**现方案（0.1.7-rc.2）**：配置区注册到 **`plugins.bundle.config`**，**key = npm 包名
+`dsh-peakrate`**（不是 host 配置命名空间 `peakrate`）。它渲染在**本插件在「插件」面板里的
+详情页**上（描述与行列表之间），内容为：可编辑的后台刷新间隔 + 实时覆盖表 + 目录来源与
+「立即刷新」。
 
-**关键约束（实测确认）**：该页签的卡片**只在其 `key` 属于 Host 提供的 settings
-命名空间时才渲染**：
+**为什么必须换**：0.1.5 时代用的 `settings.plugin.item` 槽位与
+`ctx.settings.installSection(ctx, ns, schema, entry, hooks)` 安装 API 在 0.1.7 **已被删除**。
+删除的后果**不是报错而是静默**：往不存在的槽位注册，`slots.inject` 只是等一个永不声明的
+槽位 —— 卡片直接消失，看起来与「漏注册」一模一样。
 
-```js
-// dsh-client-ui-settings-plugins 的 publish()
-const served = new Set(mirror.namespaces.map(v => v.ns))
-const namespaces = entries.filter(e => served.has(e.options.key))
-```
+**0.1.7 的两条新契约**（实机 + 源码确认，细节见 AGENTS.md 的「DSH 0.1.7 起…」条）：
 
-而**光在 settings.yaml 加一个顶层 key 不会被 serve**（已实测：卡片不渲染）。
-必须在 **host 半边**声明：
-
-```js
-ctx.inject(['settings'], (c) => {
-  c.settings.installSection(ctx, 'peakrate', SCHEMA, entry, { setSource, onChange })
-})
-```
-
-（范例：`dsh-tool-subagent/lib/model-selection-settings.js`）schema 用
-`@deepseek-ai/schemastery`（DSH 共享包 → 作 **peerDependency**）。
-
-**额外收益**：插件的配置项因此可在界面里编辑。当前只暴露 host 侧**能即时生效**的两项
-（`enabled` / `refreshIntervalHours`）；别名/映射/自定义 profile 结构复杂且需重建快照，
-仍留在 `cordis.patch.yml`。
-
-**位置决策（2026-09-12 定稿，用户拍板）**：放 **`settings.plugin.item`**。
-
-曾试过三处，最终对比：
-
-| 候选 | 结论 |
+| 事项 | 0.1.7 的做法 |
 |---|---|
-| `settings.section`（独立标签页） | **废弃** —— 用户「不要单独占一个标签页」 |
-| `settings.models.footer`（设置→模型 页脚） | **废弃** —— 语义上贴合（覆盖表讲的是模型），但**丢掉界面编辑配置的能力**（官方「插件配置」页签只渲染我们注册的卡片，不注册就没有编辑入口），且用户更认「官方插件页」 |
-| **`settings.plugin.item`（设置→插件→插件配置）** | **采纳** —— 与官方卡片（终端 / Agent 循环 / Subagent / 网页搜索）并列；`enabled` 与 `refreshIntervalHours` 可界面编辑；代价是 host 改动**需重启**才生效 |
+| settings 命名空间 | **模块导出 `Config`（schemastery schema）就是注册本身**；命名空间 = profile 里 loader entry 的 `id`（本项目 `peakrate`）。`settings.describe()` 取的是 `entry.fiber.runtime.Config` |
+| 界面可编辑 | 字段必须标 `.volatile()`：校验时解析为**稳定引用**（`{ get() }`），用户在界面保存后由 loader 直接写入该引用并发 `ctx.on('loader/volatile-update', …)` → 本插件重读并即时生效，**无需重启** |
+| 表单控件 | 官方 `@deepseek-ai/dsh-client-ui-primitives` 的 `SettingsForm` / `SettingsFormModel` / `SettingsValueField`（分阶段草稿，只有 Save 才写成一次 revision 围栏内的变更）；数据面用 client 服务 `configForms.get('peakrate')` |
 
-> 备选方案 C（覆盖表放模型页、配置放插件页，两者分工）经权衡**未采纳**：
-> 内容确实不重复，但要在两个地方找东西，而每处内容都很少，不值那份额外复杂度。
+**当前只暴露 `refreshIntervalHours`**：它 host 侧即时生效。`enabled` 仍可写在
+`cordis.patch.yml`（改它需要重新装载，属「重挂」语义），而「停用插件」在界面上由
+插件面板自身的开关承担 —— 因此不再重复做一个不会即时生效的开关。
+
+**历史（0.1.5 时代，已废弃）**：曾注册 `settings.plugin.item`（key = settings 命名空间），
+由 host 调 `installSection` 声明命名空间；其钩子契约是「`setSource` 只交接一次、`onChange`
+才是变更信号」。该 API 与槽位在 0.1.7 均已不存在 —— 保留在此仅作决策留痕，**不要再照抄**。
 
 ### 5.3 功能取舍（诚实记录）
 
@@ -394,16 +454,32 @@ dsh-peakrate/
 - `matching.ts`：provider 别名命中/未命中、`:` 后缀剥离、V4 系宽松归属、
   无匹配返回空、config 覆盖优先级
 
-**验收**（装进 web profile 后开新会话）：
+**构建产物契约**（`test/bundle-contract.test.ts`，从 `lib/client.js` 验证）：
 
-1. 打开模型选择器：`deepseek-official` 的 4 个模型与 `ollama` 的 3 个 DeepSeek 模型
-   显示倍率徽章
-2. 当前选中模型行显示倒计时；`ollama`（UTC）与 `deepseek-official`（北京时）
-   的倒计时**各自正确**（这是本插件区别于现有 DeepSeek 专用插件的核心证据）
-3. hover 匹配行显示「时段 + 倍率对照 + 倒计时」
-4. 无匹配模型（ox-alpha、kimi-k3、hy3、omen-alpha 等）不显示任何内容
-5. **E2E 审计**：通读模型选择器完整渲染输出（不只检查字段），确认无重复、
-   无错位、无残留占位
+- 三处注册齐备：`conversation.input.left` / `conversation.input.model` / `plugins.bundle.config`
+- 旧槽位回归：**不得**再注册 0.1.7 已删除的 `settings.plugin.item`
+- 组件归属：三处分别挂 `PeakrateChip` / `ModelSelect` / `PeakrateSettings`（防「注册对了但组件挂错」）
+- primitives 取用名守卫：产物里从 `@deepseek-ai/dsh-client-ui-primitives` 取的每个名字都必须
+  在 `src/client/primitives.d.ts` 里有声明，且不得出现 `Icon*Outline16/14` 旧名
+- 遮蔽槽位纪律：除 `INTENTIONALLY_SHADOWED` 清单外不得注册 shadowing 槽位；清单项必须写理由；
+  接管 single 槽位必须 `priority: -1`
+
+**验收（隔离 profile + Playwright 无头；2026-09-26 全部通过）**：
+
+1. 模型选择器**可用**：能打开、能钻进模型列表、能切换模型、切换后触发器更新
+2. 菜单内每行显示该模型此刻的倍率与倒计时；**未匹配的模型什么都不显示**
+   （`ox-alpha` / `Kimi K3` / Ollama 下的 GLM / chat 通道模型实测为空）
+3. composer 工具行的当前模型徽章仍在（与菜单呈现互补；切换后实测出现）
+4. 同一时刻**不同时区各自正确**：DeepSeek（北京时）`1d 19h` vs Ollama（UTC）`2d 6h`
+   vs xiaomi（北京时每日）`10h 12m`
+5. 配置区（插件面板 → 本插件详情页）：覆盖表正常、**无 ⚠ 告警**、刷新间隔字段可编辑、
+   `Save` / `Refresh now` 可用
+6. **通读完整渲染输出**（不只检查字段）：菜单分组顺序（DeepSeek → xiaomi → Z.ai →
+   openrouter → Ollama → opencode-go 系）、无重复行、无残留占位
+7. **控制台 `pageerror` 与 `console error` 均为 0**
+
+**未验证（如实标注）**：配置保存的**落盘链**（隔离 profile 写入受限）、官方 Desktop App、
+Linux/Windows、中文界面下的实机文案。
 
 ## 11. 已实现/未决项
 
@@ -469,6 +545,41 @@ dsh-peakrate/
 5. **验证**：装进 web profile 实机验收（§10），并按项目规则做独立模型家族 review
 
 ## 13. 变更历史
+
+### 2026-09-26 — 重基线到 DSH 0.1.7-rc.2：选择器 fork 重做 + 配置载体迁移 + 交付前审计补漏
+
+- **决策**：按 §5.0.1 的审计结论**整体重基线**（不是「换几个图标名」的增量修补）：
+  ① `src/client/ModelSelect.tsx` 以官方 `0.1.7-rc.2` 的 `ModelSelect.tsx` 为基线重做移植
+  （`MenuSurface` portal、`pending !== null` 的 busy 判据、行内/触发器 `StateDot` spinner、
+  `retainedEffort` 回退、官方 provider 排序、`provider.account` 展示名、Tab 等同 Enter /
+  Shift+Tab 等同 Escape、drill/back 的焦点交还、`RemoteResult` 语义与 `session/writer-held`
+  专用文案），再叠加本插件唯一的增量（每行倍率徽章）；
+  ② host 侧删掉已被删除的 `settings.installSection(...)`，改用 **`export const Config` +
+  `volatile()` + `ctx.on('loader/volatile-update')`**；③ 配置页从被删除的
+  `settings.plugin.item` 迁到 `plugins.bundle.config`（key = npm 包名），表单走官方
+  `SettingsFormModel`/`SettingsForm` 与 client 服务 `configForms`。
+- **理由**：旧版 `0.2.2` 在 0.1.7-rc.2 上是**真的坏的**（用户 profile 启动日志实测
+  `TypeError: settings.installSection is not a function`；client 侧旧图标名取到 `undefined`
+  会在 render 期崩掉整块选择器）。而这两类缺陷都属于「服务端产物正常、只有真实浏览器能暴露」，
+  所以必须整体重基线 + 隔离实例 E2E，而不是照旧代码打补丁。
+- **偏离与自定偏离**：相对官方组件只有三处、都已就地标注 —— 行内倍率徽章（本插件存在理由）、
+  行 `title` 附加详情（纯增量信息）、`select()` 的 rejection 兜底（官方只 `.then()`，
+  Promise 一旦拒绝 `pending` 永不落定 → 菜单持续 disabled，用户再也点不动模型）。
+  另有两处**与 §5.0.1 措辞不同**的修正已写回该节：primitives 不是独立安装目录（由前端 shell
+  作为 baseline 模块提供）；composer 座不读 `routable`，无需为它加字段。
+- **交付前「覆盖穷举」审计抓到一处真实缺口**：实机覆盖表把 `opencode-go-chat`
+  （Zen 网关模型 MiMo / GLM / Space Bunny）标为「整组零命中且无理由」。查证
+  <https://opencode.ai/docs/zen/> 的 Pricing 表为**平价结算、无 peak/off-peak 条目**
+  → 按流程补进 `UNMATCHED_BY_DESIGN`（附依据与「与 `opencode-go` 的区别」），复查后告警归零。
+- **独立模型家族 review（写码后、验证前）**：结论为「选择器移植逐项对齐官方、host 迁移是 0.1.7
+  的真实机制」，同时指出三处**中等**风险（`dsh.client.inject` 漏声明 `dsh-client-ui-settings`、
+  覆盖表依赖的 `useSessions` 是否真会送达、新测试替身让真实导出名在离线测试中不可见）。
+  → 三条**均已处置**：① 补声明（官方 cookbook §5 要求）；② 由隔离实例 E2E 证实
+  `useSessions` 送达（覆盖表 9 行正常渲染）；③ 新增「primitives 取用名必须存在于声明」
+  与「不得取旧图标名」两条守卫（并**反向验证**：把产物里的图标名改回旧名 → 两条测试如期失败）。
+- **后续结果**：单测 168 项全绿（新增 6 项契约守卫）；隔离 profile（0.1.7-rc.2）E2E 通过：
+  控制台零错误、菜单逐行徽章正确、**真的切换了模型**且工具行徽章随后出现、配置区渲染且无告警；
+  README 三张截图按新界面重拍，market 语义分 117 / 116 / 103（均 ≥ 20，第三张较改前 85 提升）。
 
 > 按日期倒序。每条记「决策 + 理由 + 后续结果」，供复盘。
 

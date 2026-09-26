@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-26
+
+### Changed
+
+- **Requires DeepSeek Harness 0.1.7-rc.2.** This release re-bases the plugin onto the 0.1.7 line; the previous release does not work there. On 0.1.7 the plugin's host half failed to load and the model selector could break, so if you are on 0.1.7 you need this version.
+- **The configuration panel moved.** It now lives on this plugin's own page in the **Plugins** panel (sidebar → Plugins → `dsh-peakrate`) instead of *Settings → Plugins → Plugin configuration*, which no longer exists upstream. The background refresh interval is editable there; the coverage table and *Refresh now* moved with it.
+- **The model selector was re-ported from the 0.1.7 upstream component.** Every interaction is preserved — keyboard navigation, aria wiring, menu positioning, loading / empty / error / retry states, the reasoning-effort submenu, and the in-flight spinner — with the per-row rates still on top.
+
+### Fixed
+
+- **A provider whose models genuinely have no time-of-day pricing could raise a false "matched nothing at all" warning.** Providers that serve several upstreams under one id (or a flat-priced gateway such as OpenCode Zen's chat channel) are now recorded with the reason they are not mapped, so the warning stays meaningful.
+- **A selection that fails at the transport layer no longer leaves the model menu permanently unclickable.** The in-flight state now always settles, so the rows come back instead of staying disabled.
+
+
 ## [0.2.2] - 2026-09-12
 
 ### Changed
@@ -55,7 +69,8 @@ First public release.
 - A cross-midnight window belongs to **the day it starts** — for overrides exactly as for regular peak windows.
 - Campaign overrides reject zero-length windows and malformed dates at parse time, because the catalog is fetched at runtime.
 
-[Unreleased]: https://github.com/log-li/dsh-peakrate/compare/v0.2.0...HEAD [0.2.0]: https://github.com/log-li/dsh-peakrate/compare/v0.1.0...v0.2.0 [0.1.0]: https://github.com/log-li/dsh-peakrate/releases/tag/v0.1.0
+[Unreleased]: https://github.com/log-li/dsh-peakrate/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/log-li/dsh-peakrate/compare/v0.2.2...v0.3.0 [0.2.0]: https://github.com/log-li/dsh-peakrate/compare/v0.1.0...v0.2.0 [0.1.0]: https://github.com/log-li/dsh-peakrate/releases/tag/v0.1.0
 
 # 更新日志
 
@@ -64,6 +79,20 @@ First public release.
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)， 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-09-26
+
+### 变更
+
+- **要求 DeepSeek Harness 0.1.7-rc.2。** 本次把插件重基线到 0.1.7 这条线；上一个版本在 0.1.7 上**不可用** —— host 半边加载失败、模型选择器可能整块崩掉，所以跑 0.1.7 请务必升级到本版本。
+- **配置面板换了位置。** 现在在**「插件」面板里本插件自己的详情页**（侧栏 Plugins → `dsh-peakrate`），不再是 *设置 → 插件 → 插件配置*（上游已删除该页签）。后台刷新间隔在那里编辑；覆盖表与「立即刷新」一并搬过去。
+- **模型选择器按 0.1.7 的官方组件重新移植。** 交互一个不少：键盘导航、aria 接线、菜单定位、加载/空/错误/重试态、推理等级二级菜单、进行中的 spinner —— 每行倍率仍叠加在其上。
+
+### 修复
+
+- **「整组零命中」告警不再误报。** 同一 provider id 下混装多家上游、或本身平价结算（如 OpenCode Zen 的 chat 通道）的 provider，现在会写明「不映射的理由」，告警因此保持可信。
+- **传输层失败的选择不再让模型菜单永久点不动。** 「进行中」状态现在一定会落定，行会恢复可点，而不是一直灰着。
+
 
 ## [0.2.2] - 2026-09-12
 
