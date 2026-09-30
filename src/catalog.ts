@@ -20,8 +20,22 @@ interface RawOverride {
   period?: string
   startDate?: string
   endDate?: string
+  /**
+   * 时刻粒度的起止（ISO 带时区偏移，如 `2026-09-25T15:00:00+08:00`）。
+   *
+   * **当前未消费** —— override 的生效区间只按 `startDate`/`endDate`（日粒度、字符串比较）。
+   * 声明出来是为了不再"静默丢弃未知键"：见到这两个字段就跳过该条 override，
+   * 并由 `test/catalog.test.ts` 的形态守卫盯着这个已知未消费清单（spec §11）。
+   */
+  startAt?: string
+  endAt?: string
   days?: number[]
-  windows?: { start?: string; end?: string }[]
+  windows?: {
+    start?: string
+    end?: string
+    /** `true` 表示**全天生效**（数据源用 `start:'00:00', end:'00:00'` 搭配此标记表达）。 */
+    allDay?: boolean
+  }[]
 }
 
 interface RawProfile {
@@ -33,13 +47,24 @@ interface RawProfile {
     peakDays?: number[]
     peakWindows?: { start?: string; end?: string }[]
     offDayName?: string
+    /**
+     * 上游标注的法定节假日日期。**必须声明**：`parseProfile` 是显式挑字段构造
+     * `RateProfile` 的，未声明的字段会被静默丢弃 —— 2026-09-30 前该字段就是这样
+     * 丢了整整两周半，导致节假日的**工作日**被误标峰价。
+     */
+    publicHolidayDates?: unknown
+    publicHolidayName?: unknown
+    /**
+     * 节假日所依据的日历时区（如 `deepseek-v4` 的 tz=UTC 但节假日按 `Asia/Shanghai` 判）。
+     *
+     * **已声明并消费**（`parseProfile` 会带进 `RateProfile.schedule`）：2026-09-30 随快照
+     * 刷新发现该键存在却未被声明 —— 与 `publicHolidayDates` 当初被丢同一形态。
+     */
+    publicHolidayTimeZone?: unknown
     overrides?: RawOverride[]
   }
-  periods?: {
-    peak?: RawPeriod
-    offPeak?: RawPeriod
-    campaign?: RawPeriod
-  }
+  /** 各时段态的定义。键名不止 `peak`/`offPeak`/`campaign` —— 促销类名字（promotion 等）也在此。 */
+  periods?: Record<string, RawPeriod | undefined>
   source?: string
   verifiedAt?: string
 }
@@ -70,6 +95,27 @@ function isClock(value: unknown): value is string {
   const m = /^(\d{1,2}):(\d{2})$/.exec(value)
   if (m === null) return false
   return Number(m[1]) <= 23 && Number(m[2]) <= 59
+}
+
+/**
+ * `YYYY-MM-DD` 是否为**真实存在的日历日**（`2026-02-30` / `2026-13-01` 一律否决）。
+ *
+ * 与 `isClock` 同一纪律：合法性只在这一处定义。节假日日期若被写错（如多一位、
+ * 月份越界），静默收下会让「当天全天谷价」这条规则在某天悄悄失效。
+ */
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (m === null) return false
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  const d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false
+  const t = new Date(Date.UTC(y, mo - 1, d))
+  // 往返一致才说明日期真实存在（Date.UTC 会把越界日期顺延，如 02-30 → 03-02）
+  return (
+    t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d
+  )
 }
 
 /** 把单个原始 profile 归一化为 RateProfile；字段不全则返回 undefined。 */
@@ -103,28 +149,52 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
     return undefined
   }
 
-  // 活动覆盖段：period 只接受受支持的取值，窗口必须合法
+  // 活动/促销覆盖段。
+  //
+  // 2026-09-30（随内置快照刷新）发现数据源的形态比初版丰富得多，且**已映射的 zai 系
+  // 当场受影响**：`promotion`（全天 0.5×）被丢弃 → 工作日 14:00-18:00 误报 peak 1×。
+  // 三条形态差异：
+  //   - `period` 名不止 `campaign`：还有 `promotion` / `campaign10` / `campaign30` / …，
+  //     **每个名字在 `periods` 里有自己的一套 badge/name/detail**。故判定改为
+  //     **数据驱动**：`periods` 里存在同名键就接受；状态统一落到三态里的 `campaign`，
+  //     而倍率/名称取该 period 自己的（`ScheduleOverride.badge`/`name`，供 UI 直接展示）。
+  //   - 窗口可写成 `{start:'00:00', end:'00:00', allDay:true}` 表示**全天生效**。
+  //     常规 `peakWindows` 仍丢弃零长度窗口（其在跨午夜分支里会变成全天，属误输入）；
+  //     override 的 `allDay` 是**显式声明**，保留并交给 schedule 层按全天展开
+  //     （`normalizedWindowsOf` 把 `end <= start` 视作 +1440）。
+  //   - `startAt`/`endAt`（ISO 带时刻）**尚未消费** → 显式跳过，并由形态守卫盯着（spec §11）。
+  const periodsRaw = raw.periods ?? {}
   const overrides: NonNullable<RateProfile['schedule']['overrides']> = []
   for (const o of schedule.overrides ?? []) {
-    if (o?.period !== 'campaign') continue // 目前仅支持 campaign
+    const periodName = typeof o?.period === 'string' ? o.period : undefined
+    if (periodName === undefined) continue
+    // 用 override 表达 peak/offPeak 没有意义（等同无覆盖，且会破坏「窗口外即谷价」语义）
+    if (periodName === 'peak' || periodName === 'offPeak') continue
+    const periodDef = periodsRaw[periodName]
+    // `== null` 而非 `=== undefined`：JSON 里写成 `null` 时 `periodDef.badge` 会抛 TypeError，
+    // 而 parseCatalog 没有 try/catch → 一个坏 profile 会让**整份**解析抛错而不是降级为 undefined。
+    if (periodDef == null) continue // 未知 period 名 → 跳过（形态守卫会盯住）
+    if (o.startAt !== undefined || o.endAt !== undefined) continue // 时刻粒度未消费（spec §11）
+
     const wins = Array.isArray(o.windows)
       ? o.windows
           .filter((w) => isClock(w?.start) && isClock(w?.end))
-          // 丢弃零长度窗口：`start === end` 会在 schedule 层的跨午夜分支里
-          // 恒为真（`minutes >= start || minutes < end`），变成**全天生效**。
-          // 常规窗口早已同样过滤（见上方 peakWindows），此处是补齐。
-          .filter((w) => w.start !== w.end)
+          // 零长度窗口只在**显式 allDay** 时才保留（见上）
+          .filter((w) => w.allDay === true || w.start !== w.end)
           .map((w) => ({ start: w.start as string, end: w.end as string }))
       : []
     if (wins.length === 0) continue
-    // 日期必须是 `YYYY-MM-DD`：schedule 层用**字符串比较**判断区间，
-    // 非此格式（如 `2026/09/03`、`2026-9-3`）会静默错判生效区间。
-    const asDate = (v: unknown): string | undefined =>
-      typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined
-    const startDate = asDate(o.startDate)
-    const endDate = asDate(o.endDate)
+
+    // 日期必须是**真实存在的日历日**：schedule 层用字符串比较判区间，
+    // 形状不对（`2026/09/03`、`2026-9-3`）或不存在的日子（`2026-02-30`）都会静默错判。
+    const startDate = isIsoDate(o.startDate) ? o.startDate : undefined
+    const endDate = isIsoDate(o.endDate) ? o.endDate : undefined
     overrides.push({
-      period: o.period,
+      period: 'campaign',
+      periodName,
+      ...(typeof periodDef.badge === 'string' ? { badge: periodDef.badge } : {}),
+      ...(typeof periodDef.name === 'string' ? { name: periodDef.name } : {}),
+      ...(typeof periodDef.detail === 'string' ? { detail: periodDef.detail } : {}),
       ...(startDate === undefined ? {} : { startDate }),
       ...(endDate === undefined ? {} : { endDate }),
       days: Array.isArray(o.days)
@@ -138,6 +208,12 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
   const offPeak = raw.periods?.offPeak
   if (typeof peak?.badge !== 'string' || typeof offPeak?.badge !== 'string') return undefined
 
+  // 法定节假日日期：逐条校验为**真实日历日**，去重后按字典序（等价时间序）。
+  // 空数组不写入 —— 上游只在 4 个 DeepSeek 系 profile 上带此字段，其余保持对象最小。
+  const holidayDates = Array.isArray(schedule.publicHolidayDates)
+    ? [...new Set(schedule.publicHolidayDates.filter(isIsoDate))].sort()
+    : []
+
   const profile: RateProfile = {
     id: raw.id,
     providerName: raw.provider,
@@ -147,6 +223,15 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
       peakDays,
       peakWindows,
       ...(typeof schedule.offDayName === 'string' ? { offDayName: schedule.offDayName } : {}),
+      ...(holidayDates.length === 0 ? {} : { publicHolidayDates: holidayDates }),
+      ...(holidayDates.length > 0 && typeof schedule.publicHolidayName === 'string'
+        ? { publicHolidayName: schedule.publicHolidayName }
+        : {}),
+      // 节假日所依据的日历时区（如 deepseek-v4：峰价按 UTC、节假日按 Asia/Shanghai）。
+      // 必须带出来，否则「节假日日界」会按 profile 时区错判（当前数据巧合无差，见 spec §11）。
+      ...(holidayDates.length > 0 && typeof schedule.publicHolidayTimeZone === 'string'
+        ? { publicHolidayTimeZone: schedule.publicHolidayTimeZone }
+        : {}),
       ...(overrides.length === 0 ? {} : { overrides }),
     },
     peakBadge: peak.badge,
@@ -154,16 +239,21 @@ function parseProfile(raw: RawProfile): RateProfile | undefined {
     peakName: typeof peak.name === 'string' ? peak.name : 'Peak',
     offPeakName: typeof offPeak.name === 'string' ? offPeak.name : 'Off-peak',
   }
-  // 活动态：只有当**确实存在 campaign override** 时才带上，避免出现
-  // 「有 campaign 徽章却永远不会进入该状态」的死数据。
-  const campaign = raw.periods?.campaign
-  if (
-    overrides.length > 0 &&
-    typeof campaign?.badge === 'string'
-  ) {
-    profile.campaignBadge = campaign.badge
-    profile.campaignName = typeof campaign.name === 'string' ? campaign.name : 'Campaign'
-    if (typeof campaign.detail === 'string') profile.campaignDetail = campaign.detail
+  // profile 级活动态槽位（初版只有这一个槽）。**当前生效 override 自己的 badge/name 优先**
+  // （见 `ScheduleOverride.badge`），这里只作回落：取 `periods.campaign`；数据源没给
+  // `campaign` 时（如 zai 只有 `promotion`）取第一个带 badge 的促销 period —— 数据驱动，不写死名字。
+  if (overrides.length > 0) {
+    const campaignDef = raw.periods?.campaign
+    const useCampaignDef = typeof campaignDef?.badge === 'string'
+    const first = overrides.find((o) => o.badge !== undefined)
+    const badge = useCampaignDef ? campaignDef?.badge : first?.badge
+    if (badge !== undefined) {
+      profile.campaignBadge = badge
+      profile.campaignName =
+        (useCampaignDef ? campaignDef?.name : first?.name) ?? 'Campaign'
+      const detail = useCampaignDef ? campaignDef?.detail : first?.detail
+      if (typeof detail === 'string') profile.campaignDetail = detail
+    }
   }
   if (typeof raw.source === 'string') profile.source = raw.source
   if (typeof raw.verifiedAt === 'string') profile.verifiedAt = raw.verifiedAt

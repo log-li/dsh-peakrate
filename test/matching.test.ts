@@ -213,4 +213,27 @@ describe('★ 防静默遗漏：每个已知 provider 要么有映射、要么�
       ).toBeDefined()
     }
   })
+
+  it('★ 回归：deepseek-account 必须有映射（2026-09-30 曾静默遗漏）', () => {
+    // 依据：它是 @deepseek-ai/dsh-llm-deepseek 的鉴权包装层（同适配器 / 同模型目录 /
+    // 余额充值制），计费与 deepseek-official 同源 → 峰谷窗口适用（spec §4.3）。
+    expect(
+      DEFAULT_PROVIDER_ALIASES['deepseek-account'],
+      'deepseek-account 曾漏配；若将来取消映射，请移入 UNMATCHED_BY_DESIGN 并写明理由',
+    ).toBe('DeepSeek')
+
+    // 该 provider 的模型来自 connection.models（与 deepseek-official 同一份目录）：
+    // deepseek-flash、deepseek-v4-pro 及其带 tag / vision-exp 变体都应命中 deepseek-v4。
+    for (const model of [
+      'deepseek-flash',
+      'deepseek-v4-pro',
+      'deepseek-v4-flash:0731',
+      'deepseek-v4-flash-vision-exp',
+    ]) {
+      expect(
+        matchProfile('deepseek-account', model, PROFILES)?.id,
+        `deepseek-account/${model}`,
+      ).toBe('deepseek-v4')
+    }
+  })
 })

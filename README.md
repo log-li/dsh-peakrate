@@ -112,7 +112,9 @@ catalog (live or bundled) ┘
 ```
 
 1. **Match.** The provider id goes through an alias table (`ollama` → *Ollama*). Provider ids are local labels you chose; the alias table is how a label becomes a billing reality. The model id is then normalised (a `:tag` suffix is stripped, case and separators unified) and matched against per-provider model patterns.
-2. **Evaluate.** The matched profile's `schedule` is evaluated in its own time zone. Peak windows, weekday filters, and any active override are considered together, and **overrides win** while their date range and weekday filter allow.
+2. **Evaluate.** The matched profile's `schedule` is evaluated in its own time zone. Three things are considered together, **highest priority first**: any active **override** (a dated promotional or campaign window), then **public holidays**, then the ordinary weekday filter and peak windows.
+   - **Public holidays are off-peak in full.** Providers that publish Chinese public holiday dates are billed at the off-peak rate for the *whole* day, so a holiday landing on a weekday is not peak. The holiday dates — like every window and multiplier — come from the data source; nothing is hard-coded, so upstream changes apply on the next refresh.
+   - **Overrides still win**, because they are the more specific rule in the same data source (a promotion can deliberately price a holiday differently).
 3. **Render.** The state and its countdown are rendered in the model selector, the composer tool row, and the coverage panel.
 
 ### Time correctness

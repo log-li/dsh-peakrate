@@ -127,3 +127,31 @@ describe('核心证据：同模型不同 provider，时段规则不同', () => {
     expect(windows).toBe('09:00-12:00 / 14:00-18:00')
   })
 })
+
+/* ------------------------------------------------------------------ *
+ * ★ 真实数据源：促销态必须被接通（2026-09-30 曾静默丢弃）
+ *
+ * 完整性说明：此前的失败形态是「数据源用 promotion/allDay 表达全天促销，插件不认 →
+ * 已映射的 zai 系在常规峰时段显示 peak 1×，实际是 0.5×」。这里只用**结构性**断言
+ * （每条 override 都得带出 period 名与自己的 badge），不写死具体倍率值 ——
+ * 上游调价不该让用例假性失败。
+ * ------------------------------------------------------------------ */
+describe('★ 真实数据源：促销 override 必须被完整消费', () => {
+  const catalog = parseCatalog(JSON.parse(readFileSync(snapshotPath, 'utf8')))
+
+  it('每条解析出的 override 都带 periodName 和非空 badge', () => {
+    let n = 0
+    for (const p of catalog?.profiles ?? []) {
+      for (const o of p.schedule.overrides ?? []) {
+        n++
+        expect(o.periodName, `${p.id}: override 未带出 periodName（period 名未被消费？）`).toBeDefined()
+        expect(typeof o.badge, `${p.id}/${String(o.periodName)}: 未带出该活动自己的 badge`).toBe(
+          'string',
+        )
+        expect(o.badge, `${p.id}/${String(o.periodName)}: badge 为空`).not.toBe('')
+      }
+    }
+    // 快照里确实存在促销 override → 这条守卫不是空转
+    expect(n).toBeGreaterThan(0)
+  })
+})

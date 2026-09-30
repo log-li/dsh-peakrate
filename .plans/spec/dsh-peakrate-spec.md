@@ -2,7 +2,7 @@
 
 Status: implemented（**0.1.7-rc.2** 重基线完成并隔离实例端到端验证通过，2026-09-26）
 创建于: 2026-09-11
-最近更新: 2026-09-26
+最近更新: 2026-09-30
 包名: `dsh-peakrate`
 
 > **本文档为活文档**：描述本插件**现在是什么样**，随设计迭代滚动更新。
@@ -37,15 +37,24 @@ DSH 生态里的「峰谷/时段」类插件（`dsh-peak-indicator`、`dsh-peak-
 **唯一数据源**：`https://offpeakclock.com/pricing.json`（DeepSeek Peak-Hour Clock）
 
 - 结构：`{ schemaVersion: 1, updatedAt, defaultProfile, profiles: [...] }`
-- 实测（2026-09-11 版）：**14 个 profile**，覆盖 8 家 provider
-  （DeepSeek / Ollama / B.AI / Z.ai / Alibaba Cloud / Xiaomi MiMo / Qoder / Tencent Cloud / Swarms）
+- 实测（2026-09-11 版）：14 个 profile；（2026-09-28 版）：**27 个 profile**
+  （DeepSeek / Ollama / B.AI / Z.ai / Alibaba Cloud / Xiaomi MiMo / Qoder / Tencent Cloud / Swarms 等）
   > 2026-09-06 版为 12 个 profile；数据源随供应商调价持续增删，**数量不是契约**，
   > 插件按 profile id 匹配，不依赖总数。
 - 每个 profile 携带：`id`、`provider`、`model`、`product`、`schedule`
-  （`timeZone` / `peakDays` / `peakWindows` / `offDayName`）、
+  （`timeZone` / `peakDays` / `peakWindows` / `offDayName` / **`publicHolidayDates`** / `publicHolidayName`）、
   `periods`（`peak` / `offPeak`，各含 `badge` 倍率字符串与 `name`）、
   `source`（官方定价页链接）、`verifiedAt`（人工核验日期）
 - 部分 profile 另有 `campaign` 活动窗口（见 §11 deferred）
+
+> **`publicHolidayDates` 是 2026-09-30 才接上的字段**。数据源一直带着它（26/27 版里
+> 4 个 DeepSeek 系 profile 各有 33 天，名称 `Chinese public holiday`），但
+> `RawProfile.schedule` 当初没声明它 → `parseProfile` 是**显式挑字段**构造的 → 被静默丢弃。
+> 语义与实现见 §3。
+>
+> **教训（本插件第二次犯同一类错）**：数据源新增字段时，插件侧必须**显式声明**才会带出来；
+> 而漏掉的后果是静默的（界面照旧显示，只是少一层规则）。
+> §4.4 的「防静默遗漏」机制只覆盖 provider/模型映射，**不覆盖 schedule 子字段** —— 待补。
 
 **获取策略**：内置快照 + 后台刷新 + 本地缓存
 
@@ -71,6 +80,8 @@ interface RateProfile {
     peakDays: number[]          // 0=周日 … 6=周六
     peakWindows: { start: string; end: string }[]   // "HH:mm" 本地于 timeZone
     offDayName?: string
+    publicHolidayDates?: string[]   // 法定节假日（YYYY-MM-DD，本时区）；当天全天谷价
+    publicHolidayName?: string      // 如 "Chinese public holiday"（目前仅透传，UI 未消费）
   }
   peakBadge: string             // 如 "2×" / "0.5× credits"
   offPeakBadge: string          // 如 "1×"
@@ -92,9 +103,44 @@ function currentPeriod(profile: RateProfile, now: Date): {
   **不引入任何日期库**
 - 当天在 `peakDays` 且当前 `HH:mm` 落在任一 `peakWindows`（start 含、end 不含）
   → `peak`；否则 `offPeak`
+- **法定节假日优先**：当天日期在 `publicHolidayDates` 里 → **全天 `offPeak`**
+  （依据上游价目页「All other hours are off-peak, including weekends and Chinese public
+  holidays **in full**」），常规星期/窗口判定一律作废
+- 优先级序：**显式 `overrides`（活动窗口）> 法定节假日 > 常规 weekday+window**
+  - `overrides` 是同一份数据源里日期/窗口级更具体的规则，故排最前
+  - 跨午夜窗口两侧都要正确：①「非节假日傍晚起的窗口溢出到节假日凌晨」→ 被节假日判成谷价；
+    ②「节假日当天的跨午夜窗口溢出到次日」→ 一并作废（`isPeakAt` 的 `prevDayIsHoliday` 参数），
+    否则节假日次日凌晨会被错误地判成峰时
+  - 当前数据源里 4 个带节假日的 profile **窗口都不跨午夜**，第二条属防御性实现（有用例覆盖）
+- **节假日日历日**按 `publicHolidayTimeZone` 判定（若声明），而不是 profile 的 `timeZone` ——
+  数据源允许「峰价按 UTC、节假日按 Asia/Shanghai」（`deepseek-v4` 即如此）。
+  实现：`holidayDateFor()` 把候选时刻换算到该时区取日期；**倒计时扫描里先解析时间戳再判状态**，
+  否则节假日边界的小时会整体偏移。
+- **活动/促销态（`overrides`）的形态**（2026-09-30 重做）：
+  - `period` 名**数据驱动**：只要该名字在 `periods` 里有定义就接受
+    （当前数据有 `campaign` / `promotion` / `campaign10` / `campaign30` / `campaignBusy` / `campaignIdle`），
+    状态统一归一化为三态里的 **`campaign`**；
+  - **倍率取该活动自己的** `periods[<name>].badge`（`ScheduleOverride.badge`，
+    经 `PeriodResult.activePromo` 外露给 UI）。profile 级的 `campaignBadge` 只是单一槽位的回落 ——
+    同一 profile 可有多个促销态且倍率不同（zai 的 `campaign` 与 `promotion`），只靠它会显示错；
+  - **倒计时指向的活动也用"那一刻那条"自己的倍率**（`PeriodResult.nextActivePromo`）：
+    从常规态翻转**进**某条活动时，若仍取 profile 级回落槽位，会显示出**另一个**活动的倍率
+    （两个不重叠的活动交替时必然串用）。
+  - 窗口可写 `{start:'00:00', end:'00:00', allDay:true}` 表示**全天**（override 保留零长度窗，
+    常规 `peakWindows` 仍丢弃 —— 后者是误输入）；
+  - **`startAt`/`endAt`（ISO 带时刻）尚未消费**：带这两个字段的 override 会被显式跳过，
+    见 §11。
+- **形态守卫**（`test/catalog.test.ts`）：数据源的每个 `schedule` 子键、`override` 键、窗口键，
+  以及每个 `overrides[].period` 取值，都必须**已被消费**或**在守卫里登记理由**；
+  被 `parseCatalog` 整体丢弃的 profile 也必须在允许清单里。新增形态会直接让测试失败 ——
+  见 §4.4。
 - `minutesUntilSwitch`：向后找到下一个状态翻转点（跨日、跨周末、跨 DST 都要正确），
   用于倒计时显示。实现要点（2026-09-12 修订）：
-  1. **扫描上界 8 天**——已穷举 127 种非空 `peakDays` 子集验证其充分性（见 §13）；
+  1. **扫描上界 10 天**（`dayOffset` 0..9）——已穷举 127 种非空 `peakDays` 子集验证其充分性（见 §13）；
+     上界的依据是「**必须 > 最长连续常数状态段**」：连续多日节假日、连续多日促销会把状态
+     恒定一段，上界不够就扫不到翻转点 → 倒计时变 `Infinity` → UI 只剩「此刻」行。
+     当前数据最长常数段 ≈9 天（春节连假），**10 天已贴近边界**；若上游出现更长连假须同步上调
+     （独立 review 2026-09-30 指出，已记入 §11）；
   2. **按真实时间差计算，不按固定 1440 分钟/天**——夏令时切换当天只有 1380/1500
      分钟，按固定日长累加会差 1 小时（见 §13）。
 
@@ -110,7 +156,18 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 |---|---|---|
 | `ollama` | Ollama | `ollama-deepseek-v4` |
 | `deepseek-official` | DeepSeek | `deepseek-v4` |
+| `deepseek-account` | DeepSeek | `deepseek-v4` |
 | `xiaomi-token-plan-cn` | Xiaomi MiMo | `xiaomi-mimo-v2-5-token-plan` |
+
+**`deepseek-account`（2026-09-30 补）**：DSH 的「DeepSeek Account」provider（浏览器 PKCE 登录，
+provider id `deepseek-account`，displayName `DeepSeek Account`）。它与 `deepseek-official`
+**共用同一个适配器与同一份模型目录** —— `@deepseek-ai/dsh-llm-deepseek-account` 从
+`@deepseek-ai/dsh-llm-deepseek` 导入 `Config` / `resolveAdapterOptions` / `registerDeepSeekProvider`，
+`discoverModels` 直接返回 `connection.models`，**唯一差别是鉴权**（账号 token `x-dsh-auth-token`
+vs API key）。因此计费与官网 API 同源，峰谷窗口同样适用。
+依据：<https://api-docs.deepseek.com/quick_start/pricing/> 的 Deduction Rules（「deducted from your
+topped-up balance or granted balance」+ off-peak 为 peak 一半、peak 为 UTC 01:00-04:00 / 06:00-10:00 周一至周五）。
+**排查记录**：此前该 provider 既未映射、也未进 `UNMATCHED_BY_DESIGN` → 属漏项，改由本行补齐。
 
 **OpenCode Go 系**（`ocg` / `ocg-1` / `opencode-go`）→ `deepseek-v4`。
 依据其官方文档（<https://opencode.ai/docs/go/>）：
@@ -148,8 +205,27 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 | provider | 模型 | profile | 时段规则 |
 |---|---|---|---|
 | `deepseek-official` | deepseek-flash、deepseek-v4-flash、deepseek-v4-pro、deepseek-v4-flash-vision-exp | `deepseek-v4` | Asia/Shanghai 周一–五 09:00-12:00、14:00-18:00 · 2× / 1× |
+| `deepseek-account` | 与 `deepseek-official` **同一份目录**（`connection.models`：deepseek-flash、deepseek-v4-pro 及其带 tag 变体） | `deepseek-v4` | 同上（UTC 01:00-04:00、06:00-10:00 ≡ 北京 09:00-12:00、14:00-18:00 · 2× / 1×） |
 | `ollama` | deepseek-v4-flash:0731、deepseek-v4-pro:0813、deepseek-v4.1-flash | `ollama-deepseek-v4` | **UTC** 周一–五 12:00-18:00 · 2× / 1× |
 | `xiaomi-token-plan-cn` | 该 provider 下的模型 | `xiaomi-mimo-v2-5-token-plan` | Asia/Shanghai 每天 08:00-00:00 · 1× / 0.8× credits |
+
+> **`deepseek-account` 归入 `deepseek-v4` 的依据（2026-09-30 补）**：该 provider 是**鉴权包装层** ——
+> 从 `@deepseek-ai/dsh-llm-deepseek` 导入 `Config` / `resolveAdapterOptions` / `registerDeepSeekProvider`，
+> `discoverModels` 直接返回 `connection.models`，仅把鉴权头换成 `x-dsh-auth-token`。
+> 计费为**余额充值制、非订阅配额制**：asar 内 `QUOTA_EXCEEDED_CODE="QUOTA"` 的注释为
+> “exhausted account quota **or balance**”，`ACCOUNT_QUOTA_EXCEEDED_CODE` 指向 **billing page**；
+> 官方价目 Deduction Rules 覆盖 topped-up / granted balance 且按峰谷倍率扣
+> （<https://api-docs.deepseek.com/quick_start/pricing/>）。
+> 曾属**漏项**：`src/client/ModelSelect.tsx:757` 早已特判该 provider 的排序与展示名，只有匹配层漏配。
+
+> ✅ **已实现（2026-09-30）**：`publicHolidayDates` 现已接通 ——
+> `catalog.ts`（声明 + `isIsoDate` 逐条校验真实日历日 + 去重升序）→ `matching.ts` / `schedule.ts`（类型）
+> → `schedule.ts`（`isPublicHoliday`；`stateAt` 判全天 `offPeak`；跨午夜溢出由 `isPeakAt` 新参数作废）。
+> **倒计时无需改搜索逻辑**：候选翻转点里本就含每天 00:00，节假日因此天然成为翻转点。
+> 用例：`test/schedule.test.ts` 的「★ 法定节假日」一组（8 例）+ `test/catalog.test.ts` 的
+> 「★ 法定节假日字段：白名单与校验」一组（5 例）。
+> **不变量：插件不含任何硬编码日期** —— 节假日期与全部峰谷时刻都来自数据源，
+> 上游改动后插件下次刷新即生效（`data/pricing.json` 随 release 重新同步，见 §2）。
 
 **不显示**：`ollama` 下的 glm-5.3 / glm-5.3-flash / glm-5.2 / minimax-m3 / kimi-k3、
 `ocg-1-chat` 的 omen-alpha、`opencode-go-chat` 的 MiMo / GLM / Space Bunny（Zen 平价结算，
@@ -159,18 +235,35 @@ DSH 的 provider id 与数据源里的 provider 展示名不同名，需要显�
 > 注意：`ocg`·`opencode-go`·`ocg-1` 的 **DeepSeek 系是显示**的（转售继承上游峰谷，见 §4.1）；
 > 不显示的是它们的 **chat** 通道 —— 两者名字相近但定价模型完全不同。
 
-### 4.4 防静默遗漏机制（2026-09-12 新增）
+### 4.4 防静默遗漏机制（2026-09-12 新增；2026-09-30 扩展到 schedule 子字段）
 
 **根因**：漏掉 ocg 与之前的槽位遮蔽事故是**同一类 bug** —— 「缺少决策」被当成
 「决策就是不做」：没注册 = 没 UI，不在数据源 = 不显示。两者都**静默退化**。
 
-三层防护：
+**2026-09-30 追加的教训**：同一个根因在**数据源形态**这一层又犯了两次 ——
+`publicHolidayDates` 未声明被丢两周半（节假日的工作日误报峰价）、`promotion` 等新
+period 名 + `allDay` 窗口未消费（已映射的 zai 系当场显示错倍率）。
+**共同机制**：`parseProfile` 是**显式挑字段**构造的，数据源新增键/新取值不会报错，
+只会悄无声息地少一层规则。原三层防护只管 provider/模型映射，**不管 schedule 子字段** —— 故补第 4 层。
+
+四层防护：
 
 1. **代码清单 + 守卫测试**：`UNMATCHED_BY_DESIGN`（`src/matching.ts`）要求每个
    已知 provider **要么有映射、要么写明理由**；`test/matching.test.ts` 断言清单
    理由非空、不与别名表冲突、且清单内的 provider 确实匹配不到。
    另有一条具名回归测试禁止 ocg 系再次静默消失。
    **已反向验证**：移除 `ocg` 映射后测试失败并提示「曾漏配」。
+
+4. **★ 数据形态守卫**（`test/catalog.test.ts` 的「★ 形态守卫」一组，2026-09-30 新增）：
+   直接遍历**包内快照**（`data/pricing.json`）做静态断言，把「静默丢弃」变成「必须登记」：
+   - 每个 `schedule.*` 子键 ∈ 已消费集合 ∪ `IGNORED_SCHEDULE_KEYS`（每条附理由）；
+   - 每个 `overrides[]` 键与窗口键同理（`startAt`/`endAt` 即在此登记为"已知未消费"）；
+   - 每个 `overrides[].period` 取值必须能在该 profile 的 `periods` 里解析
+     （解析不到 = `parseProfile` 会跳过该条 override，正是 zai promotion 的失败形态）；
+   - 被 `parseCatalog` 整体丢弃的 profile id 必须在 `ALLOWED_DROPPED` 里附理由
+     （当前 7 个：峰窗写成 `00:00-00:00` 的 base profile）。
+   **已反向验证**：往快照里塞一个未知 schedule 键 → 该组立即失败并打印该怎么处理。
+   与第 2 层互补：**这一层管「形态」，第 2 层管「映射」，两者都不靠人记得去看**。
 
 2. **设置页实时覆盖表**：`settings.section` 的「模型峰谷倍率」页（§5.4）逐
    provider 列出模型与命中情况；**「整组零命中且无已知理由」的 provider 会被
@@ -536,6 +629,24 @@ Linux/Windows、中文界面下的实机文案。
 - **非数据源覆盖的 provider**：不显示；若将来数据源扩充或用户用 `customProfiles`
   自建，可自然生效。
 
+### 11.3 已知未消费的数据形态（2026-09-30 登记，均有守卫盯着）
+
+这些形态**在数据源里存在但插件不消费**，且都已在 `test/catalog.test.ts` 的形态守卫里登记理由 ——
+出现新形态会直接让测试失败，不致重演「静默丢两周半」。
+
+| 形态 | 当前处理 | 理由 / 影响 |
+|---|---|---|
+| `overrides[].startAt` / `endAt`（ISO 带时刻） | 显式跳过该条 override | override 只按**日粒度**（`startDate`/`endDate` 字符串比较）生效；消费时刻粒度要连带改倒计时扫描的时间语义。 **⚠️ 修正（第三轮 review 2026-09-30）**：原文写「带此形态的 profile 均未映射 → 无用户影响」，**不准确** —— `bai` 别名已在 `DEFAULT_PROVIDER_ALIASES` 注册（`'bai': 'B.AI'`），用户自定义 `modelMappings` 即可命中 `bai-deepseek-v4`；且该 profile 的 `campaign30`（`0.3×`，`startAt: 2026-09-25T15:00+08:00`、**无 `endAt`**）在快照里**仍然生效**。准确表述：**默认映射不含 bai 系，故开箱无影响；但用户配置可达，届时该活动价会被漏掉**。完整消费（时刻粒度）列入待办。<br>**不要用「取日期部分」的半消费**：`startAt` 落在 15:00，按日粒度取会让活动**提前 15 小时**开始，属另一种错误显示 |
+| `schedule.dayTimeZone` | 忽略 | 语义是「**星期几**按哪个时区判」，可与 `timeZone`（窗口时区）不同。当前仅 `above-deepseek-v4` 带（`Asia/Shanghai` vs `UTC`），该 provider 无别名 → 无用户影响。消费它需把 weekday 的来源时区参数化（触及 `stateAt` 与倒计时扫描） |
+| `schedule.sourceWindows` / `windowName` / `sourceTitle` / `sourceNote` | 忽略 | 数据源自带 widget 的展示文案，插件自行渲染倍率，不需要 |
+| `periods[].status` / `periods[].tone` | 忽略 | 同上：数据源 widget 的实时状态文案与配色提示（第三轮 review 补登记，原守卫只遍历 `schedule.*`，漏了 period 定义体） |
+| profile 顶层 `title` / `subtitle` / `kicker` / `shortName` / `slug` / `product` / `temporary` | 忽略 | 同上：站点/widget 展示字段，插件不使用 |
+| profile 顶层 `accountBenefit` | 忽略 | Z.ai 账号权益说明文案（原文明确 "this is not a price multiplier"）—— 不参与倍率判定 |
+| `schedule.publicHolidaySource` | 忽略 | 节假日清单的出处链接（gov.cn）；profile 已有 `source`/`verifiedAt`，UI 未展示 |
+| **跨时区「前一日节假日」的 ±1 天** | 按节假日时区取前一日 | `stateAt` 用 `addDays(holidayDate, -1)` 判「前一天是否节假日」，而 `holidayDate` 属于节假日时区、跨午夜窗口的溢出归属却按 **profile 时区**的前一日 —— 两时区日界错位时段内会差一天。当前**不可达**（`deepseek-v4` 的 UTC 窗口不跨午夜；另三家的节假日时区 = profile 时区），故未改代码，仅登记 |
+| **多促销重叠时的裁决** | 取**数据序首条** | `zai-glm-5-3-flash` 的 `campaign`（23:00-09:00）与 `promotion`（全天）在夜间同时生效 → 取列表中靠前的那条（显示其自身 badge）。两种取义都成立（2× quota 与 0.5× credit 本就并行），策略在此登记，避免被误认为随机 |
+| 扫描上界 10 天 | 固定值 | 当前最长连续常数状态段 ≈9 天（春节连假）。上游若出现更长连假须同步上调，否则倒计时退化为 `Infinity` → UI 只剩「此刻」行（不崩，只丢信息） |
+
 ## 12. 实现阶段
 
 1. **骨架**：包结构、`cordis.patch.yml`、内置快照同步脚本、纯函数模块 + 单测
@@ -545,6 +656,124 @@ Linux/Windows、中文界面下的实机文案。
 5. **验证**：装进 web profile 实机验收（§10），并按项目规则做独立模型家族 review
 
 ## 13. 变更历史
+
+### 2026-09-30 — 补 `deepseek-account` 映射 + hover 卡背景 + 记录节假日缺口
+
+- **决策 1（补映射）**：用户报 DSH 的「DeepSeek Account」provider 不显示峰谷。
+  定位：`DEFAULT_PROVIDER_ALIASES` 只有 `deepseek-official`，而该 provider id 是 `deepseek-account`
+  —— **provider 是精确匹配，不存在模糊匹配**（归一化只作用于模型 id）。
+  按 §4.4 的纪律（依据必须是**上游是否有峰谷定价**）核实后判定为**应映射而非「有意不映射」**：
+  它是 `dsh-llm-deepseek` 的鉴权包装层，同适配器、同模型目录、余额充值制。详见 §4.1 / §4.3。
+  依据：<https://api-docs.deepseek.com/quick_start/pricing/>（Deduction Rules）+ asar 内
+  `QUOTA_EXCEEDED_CODE` / `ACCOUNT_QUOTA_EXCEEDED_CODE` 的注释。
+- **决策 2（hover 卡背景）**：用户报 hover 卡背景透明、压在 composer 文字上不可读。
+  定位：`.dsh-peakrate-hover` 没有 background，且**官方 `dsh-client-ui-model-selection` 的 menu 规则里也没有**
+  （逐字段核对），原注释「底色会从 ms-menu 继承」不成立。改取官方 **HoverCard 原语**用的
+  `background: var(--dsw-specific-menu)`（macOS 下 94% 不透明）；**不动 `ms-menu`**，保持 fork 的菜单视觉一致。
+- **决策 3（记录缺口）**：发现数据源的 `schedule.publicHolidayDates` 被 `catalog.ts` 丢弃 →
+  节假日的**工作日**会被误标峰价（上游按谷价全天计费，故下一个真峰价日是 10/8）。
+  **本轮只记录、未实现**，修复范围见 §4.3 的缺口说明。
+- **独立模型家族 review**：无【严重】；两条【中等】（spec 同步不全、缺守卫测试）已按报告补齐，
+  另采纳【轻微】的 CHANGELOG 条目。review 明确指出「账号侧是否实际应用峰谷倍率」属上游服务端行为，**静态不可证**，
+  须留给隔离实例红绿对照 + `scripts/audit-coverage.mjs` 穷举。
+- **后续结果**：待补守卫测试后 build → 隔离实例验证 → commit。
+
+#### 同日续 —— 节假日接通 + 快照刷新 + 用例与易变数据解耦
+
+- **决策 4（节假日接通）**：上面「决策 3」由用户要求从「记录」升级为「实现」。改动跨 3 处：
+  `catalog.ts`（声明字段 + `isIsoDate` 校验真实日历日 + 去重升序）、`matching.ts` / `schedule.ts`（类型）、
+  `schedule.ts`（`isPublicHoliday` + `stateAt` 全天 `offPeak`；`isPeakAt` 新增 `prevDayIsHoliday` 以作废
+  节假日当天的跨午夜溢出）。**倒计时未改搜索逻辑** —— 候选点本就含每天 00:00。
+  新增 13 个用例（schedule 8 + catalog 5）。语义与优先级见 §3，字段说明见 §2。
+- **决策 5（刷新内置快照）**：`data/pricing.json` 仍是 2026-09-11 版（14 profiles，**无节假日**），
+  而已在跑的运行时缓存（`~/.dsh/dsh-peakrate/pricing.json`）是当天拉的 2026-09-28 版（27 profiles，**带 33 天节假日**）。
+  按 §2 既定流程「构建期从数据源同步」刷新快照，使**首次安装与离线**也带节假日。
+  > 用户疑问「刷新也不好使」的真相：**host 的远端拉取一直是好的**（缓存里就有节假日数据），
+  > 失效点只在 `catalog.ts` 的字段丢弃 —— 即决策 4。
+- **决策 6（用例与易变数据解耦）**：刷新快照后 3 个 `store.test.ts` 用例翻转（`有合法缓存时优先用缓存`、
+  `HTTP 非 2xx 时沿用旧数据`、`远端 schemaVersion 不支持时丢弃本次结果`）—— 原因是夹具写死
+  `updatedAt: '2026-09-11'`，而 `load()` 的优先级是「缓存比内置快照旧 → 丢弃缓存」，
+  快照一刷新这些「合法缓存」就变成了「过期缓存」。
+  修法：`catalog()` 夹具默认取**快照同款 `updatedAt`**（并抽出 `snapshotUpdatedAt()` helper 复用），
+  使「有效缓存」的语义与快照同步日期无关。**用户明确要求：不得把易变的峰谷/节假日数据写成断言**，
+  故此轮所有节假日用例都用**本地夹具日期**（不引用上游当天数据），上游改时段不会引起假性失败。
+- **独立模型家族 review（第二轮）**：针对决策 4/5/6 发起，见文件末尾 review 记录。
+- **后续结果**：typecheck + 全量 182 用例通过；待第二轮 review 结论 → build → 隔离实例 E2E → release。
+
+#### 同日三续 —— 第二轮 review 的修正（含 1 项【严重】）
+
+第二轮独立模型家族 review（针对决策 4/5/6）结论 **需先修正**，逐条核验后全部采纳：
+
+- **【严重】促销态新形态未消费 → 已映射模型显示错倍率**：快照里的 `promotion` /
+  `campaign10` / `campaign30` 等 period 名 + `windows[].allDay` 被 `parseProfile` 静默丢弃，
+  而 `zai-glm-5-3` / `zai-glm-5-3-flash` **是已映射 profile** → 促销窗期（当时有效）的工作日
+  14:00-18:00 误报 `peak 1×`，实际是 promotion 全天 `0.5×`。
+  **这是我刷新快照引入的**（旧快照无此形态）。
+  修法（review 的建议②的加强版）：period 名改为**数据驱动**（`periods` 里有定义即接受）、
+  状态归一化到 `campaign`、**倍率取该活动自己的 badge** 并经 `PeriodResult.activePromo`
+  外露给 UI、`allDay` 全天窗保留；`startAt`/`endAt` 时刻粒度显式跳过并登记（§11.3）。
+  新增 5 个用例（含"同一 profile 两个促销态各带自己 badge"）。
+- **【中】`prevDayIsHoliday` 缺真红绿用例**：原跨午夜用例走的是**另一方向**
+  （节假日是溢出的落点日），删掉该参数测试仍全绿。补了「节假日当天有跨午夜窗、次日非节假日」
+  的一组（4 例），并**做变异测试确认**：把参数置 false → 恰好那 1 条变红，还原后全绿。
+- **【中】§4.4 机制不覆盖 schedule 子字段** → 新增**数据形态守卫**（§4.4 第 4 层，5 例）：
+  每个 schedule 子键 / override 键 / 窗口键 / period 名 / 被丢弃 profile 都要有归属或登记理由。
+  **已反向验证**：往快照塞未知键 → 立即失败。
+  该守卫还顺带查出数据源另有 `dayTimeZone`（**语义非平凡**：星期按哪个时区判）、
+  `publicHolidaySource`、`sourceWindows`/`windowName`/`sourceTitle`/`sourceNote` 六个未登记键 → 全部登记（§11.3）。
+- **【中】`publicHolidayTimeZone` 被静默丢弃** → 已声明**并消费**：`holidayDateFor()` 把候选时刻
+  换算到节假日时区取日期，倒计时扫描改为**先解析时间戳再判状态**（否则节假日边界偏 8 小时）。
+- **【轻】其余**：spec 的「扫描上界 8 天」改为实际的 **10 天**并补依据（§3）；
+  override 的 `asDate` 改用 `isIsoDate`（同一校验纪律）；`matching.ts` 的「数据源只覆盖 8 家 provider」注释更新为随收录变化并补未登记 provider 的暴露路径。
+- **未采纳/未核实**：DST 存量问题（非本次引入，当前 4 个节假日 profile 无 DST）；
+  「上游对 promotion 与真实计费的最终意图」静态不可证，按既定流程留待实机核对。
+
+**结果**：typecheck + 全量 **196 用例**通过（182 → +14）。
+
+#### 同日四续 —— 自查补强（客户端层护栏 / 倒计时的活动归属 / 文档修正）
+
+第二轮 review 落地后，我自己按「终版 diff 复核 + spec 一致性自查」又发现三处该补的：
+
+- **客户端层缺护栏**：此前只验到 `currentPeriod`（schedule 层），没验 `rateFor` 实际取的那个
+  badge（client 层）。补 2 例，夹具里 **profile 级槽位故意放另一个活动的倍率**（`2× quota`），
+  取错必然失败；并做变异验证（让 `periodBadge` 忽略活动自己的 badge → 恰好那 1 条变红）。
+- **倒计时指向的活动会串用倍率**：`nextBadge` 原走 profile 级单一槽位 —— 两个**不重叠**的活动
+  交替时（活动 A 结束后接活动 B）必然显示成另一个的倍率。修法：`minutesUntilFlip` 在翻转点
+  一并给出该处的 override（`PeriodResult.nextActivePromo`），客户端据此取 badge；三处判定
+  抽成 `activeOverrideAt()` 共用，避免再次各写一遍。补 3 例（周六活动 A / 周日活动 B）。
+  > 我第一版用例**前提就写错了**（两个 override 合并覆盖全天且同为 `campaign` 态 → 状态永不翻转 →
+  > `nextPeriod` 本就该是 undefined）；是代码对、测试错，已重写为「从常规态翻转**进**某条活动」。
+- **自己引入的孤儿注释**：插入 `activeOverrideAt` 时把 `stateAt` 的 JSDoc 留在了新函数头上
+  （`stateAt` 反而没文档）。已各自归位，并把 `stateAt` 的文档更新为「override > 节假日 > 常规」。
+
+**最终结果**：typecheck + 全量 **202 用例**通过（182 → +20）；形态守卫与两处护栏均做过变异验证。
+
+#### 同日五续 —— 第三轮 review（促销态实现 / 守卫 / 节假日时区）的处置
+
+第三轮独立模型家族 review 结论：**无【严重】**，4【中等】+ 3【轻微】，**可以进入验证**。
+逐条独立核验后全部采纳（证据我都亲自复核过）：
+
+- **L3（唯一的代码缺陷）**：`periods[<name>]` 为 JSON `null` 时 `periodDef.badge` 会抛 TypeError，
+  而 `parseCatalog` 无 try/catch → 一个坏 profile 会让**整份**解析抛错而非降级。
+  改为 `periodDef == null`。已修。
+- **M1（守卫判据单向）**：原守卫只断言 override 的 period 名「能解析」，但 `peak`/`offPeak`
+  恒在 `periods` 里 → 这类 override 会**过守卫又被静默跳过**（能解析 ≠ 被消费）。
+  守卫补一条：不存在 period 为 `peak`/`offPeak` 的 override（当前 0 条，属预防）。
+- **M3（守卫漏两层）**：只遍历 `schedule.*` / `overrides[]` / 窗口键，漏了 **period 定义体内键**
+  （`status` 69 处、`tone` 15 处）与 **profile 顶层键**（`accountBenefit` 等 8 个）。
+  两层都补上「已消费或登记理由」，并实测确认清单齐备。
+- **M4（守卫只看键不看值）**：`publicHolidayDates` 的元素格式漂移会被逐条滤掉 →
+  「全天谷价」保护无声消失（与本插件修掉的「静默丢两周半」同类）。守卫补**取值级**断言：
+  声明了该字段就必须非空且全部为真实日历日；`publicHolidayTimeZone` 必须能被 Intl 解析。
+  **已做变异验证**：注入 `2026-02-30` → 恰好那 1 条变红。
+- **M2（spec 措辞不准确）**：§11.3 原写 startAt-only 的 profile「均未映射 → 无用户影响」，
+  **不实** —— `bai` 别名已注册、用户配置可达，且 `bai-deepseek-v4` 的 `campaign30` 在快照里
+  仍然生效。已改为准确表述（开箱无影响 / 用户配置可达时漏活动价），并**明确否决**了 review
+  建议的「取日期部分」半消费（`startAt` 在 15:00，按日取会让活动提前 15 小时，是另一种错误显示）。
+- **L1/L2**：跨时区「前一日节假日」的 ±1 天潜在偏差、多促销重叠取数据序首条的策略 ——
+  均登记进 §11.3（当前不可达 / 策略性，未改代码）。
+
+**结果**：typecheck + 全量 **206 用例**通过（202 → +4 条守卫加固）；`lib/` 已重建同步。
 
 ### 2026-09-26 — 重基线到 DSH 0.1.7-rc.2：选择器 fork 重做 + 配置载体迁移 + 交付前审计补漏
 

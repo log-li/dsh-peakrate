@@ -65,3 +65,64 @@ describe('rateFor —— config 覆盖生效', () => {
     expect(r?.profile.id).toBe('ollama-deepseek-v4')
   })
 })
+
+/* ------------------------------------------------------------------ *
+ * ★ 促销态徽章：必须用**当前生效那条活动自己的**倍率
+ *
+ * 2026-09-30 修：`periodBadge` 原先只读 profile 级单一 `campaignBadge` 槽位 ——
+ * 同一 profile 有多个促销态（zai 的 campaign 与 promotion）时会显示成另一个活动的倍率。
+ * 本组用自建 fixture（不依赖上游当天数据），并让 profile 级槽位与活动自己的倍率**故意不同**，
+ * 以便「取错了」必然失败。
+ * ------------------------------------------------------------------ */
+describe('★ 促销态徽章取自活动自身', () => {
+  /** 自建 profile：常规工作日 14:00-18:00 峰；另有一条全天 0.5× 的 promotion。 */
+  const promoProfile = {
+    id: 'promo-fixture',
+    providerName: 'Vendor',
+    modelLabel: 'Model',
+    schedule: {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [1, 2, 3, 4, 5],
+      peakWindows: [{ start: '14:00', end: '18:00' }],
+      overrides: [
+        {
+          period: 'campaign' as const,
+          periodName: 'promotion',
+          badge: '0.5×',
+          name: 'All-day off-peak',
+          days: [0, 1, 2, 3, 4, 5, 6],
+          windows: [{ start: '00:00', end: '00:00' }],
+        },
+      ],
+    },
+    peakBadge: '1×',
+    offPeakBadge: '0.5×',
+    peakName: 'Peak',
+    offPeakName: 'Off-peak',
+    // profile 级槽位故意放**另一个**活动的倍率：取错就必然断言失败
+    campaignBadge: '2× quota',
+    campaignName: 'Another campaign',
+  }
+  const config = {
+    providerAliases: { 'fixture-provider': 'Vendor' },
+    modelMappings: [{ provider: 'fixture-provider', match: '', profile: 'promo-fixture' }],
+  }
+
+  it('促销窗内 → 用活动自己的 0.5×，而不是 profile 槽位的 2× quota', () => {
+    // 2026-09-30（周三）北京 15:00 = UTC 07:00，落在常规峰窗内
+    const r = rateFor('fixture-provider', 'any-model', [promoProfile], config, new Date('2026-09-30T07:00:00Z'))
+    expect(r?.period).toBe('campaign')
+    expect(r?.badge).toBe('0.5×')
+    expect(r?.badge).not.toBe('2× quota')
+  })
+
+  it('无促销时不受 profile 槽位影响（常规峰/谷照旧）', () => {
+    const bare = { ...promoProfile, schedule: { ...promoProfile.schedule, overrides: [] } }
+    const peak = rateFor('fixture-provider', 'any-model', [bare], config, new Date('2026-09-30T07:00:00Z'))
+    expect(peak?.period).toBe('peak')
+    expect(peak?.badge).toBe('1×')
+    const off = rateFor('fixture-provider', 'any-model', [bare], config, new Date('2026-09-30T13:00:00Z'))
+    expect(off?.period).toBe('offPeak')
+    expect(off?.badge).toBe('0.5×')
+  })
+})

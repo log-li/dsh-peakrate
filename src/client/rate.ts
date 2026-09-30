@@ -42,23 +42,37 @@ export function rateFor(
 ): RateState | undefined {
   const profile = matchProfile(provider, model, profiles, config)
   if (profile === undefined) return undefined
-  const { period, minutesUntilSwitch, nextPeriod } = currentPeriod(profile.schedule, now)
+  const { period, minutesUntilSwitch, nextPeriod, activePromo, nextActivePromo } = currentPeriod(
+    profile.schedule,
+    now,
+  )
   return {
     profile,
     period,
-    badge: periodBadge(profile, period),
+    // 促销态用**当前生效那条活动自己的** badge（同一 profile 可有多个促销态，倍率各不同）
+    badge: periodBadge(profile, period, activePromo?.badge),
     minutesUntilSwitch,
     ...(nextPeriod === undefined
       ? {}
       : {
           nextPeriod,
-          nextBadge: periodBadge(profile, nextPeriod),
+          // 翻过去若也是促销态，同样用**那一刻那条活动自己的** badge
+          nextBadge: periodBadge(profile, nextPeriod, nextActivePromo?.badge),
         }),
   }
 }
 
-/** 取某时段态的徽章文案（活动态缺数据时回退峰时文案，避免渲染出 undefined）。 */
-export function periodBadge(profile: RateProfile, period: Period): string {
+/**
+ * 取某时段态的徽章文案（活动态缺数据时回退峰时文案，避免渲染出 undefined）。
+ *
+ * @param profile - 命中的费率 profile。
+ * @param period - 三态之一。
+ * @param promoBadge - 当前生效活动**自己的**倍率（`ScheduleOverride.badge`）。
+ *   促销态优先用它 —— profile 级的 `campaignBadge` 只是唯一槽位的回落值，
+ *   一个 profile 有多个促销态时它必然对不上其中某个。
+ */
+export function periodBadge(profile: RateProfile, period: Period, promoBadge?: string): string {
+  if (period === 'campaign' && promoBadge !== undefined && promoBadge !== '') return promoBadge
   if (period === 'campaign') return profile.campaignBadge ?? profile.peakBadge
   return period === 'peak' ? profile.peakBadge : profile.offPeakBadge
 }

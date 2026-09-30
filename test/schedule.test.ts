@@ -567,3 +567,295 @@ describe('★ 跨午夜 override 归属「开始日」（独立 review #5 修正
     expect(currentPeriod(bad, utc('2026-09-14T03:00:00Z')).period).toBe('campaign')
   })
 })
+
+/* ------------------------------------------------------------------ *
+ * ★ 法定节假日（schedule.publicHolidayDates）
+ *
+ * 依据上游价目页：「All other hours are off-peak, including weekends and
+ * **Chinese public holidays in full**」。
+ * 2026-09-30 前的缺陷：catalog 层没声明该字段 → 被静默丢弃 → 节假日的**工作日**
+ * 被误标峰价（用户 2026-09-30 实测报告：「下一次峰价应该是 10.8」）。
+ * ------------------------------------------------------------------ */
+
+/** 数据源 deepseek-v4 的节假日集合（截取与本组用例相关的一段）。 */
+const CN_HOLIDAYS = [
+  '2026-09-25',
+  '2026-09-26',
+  '2026-09-27',
+  '2026-10-01',
+  '2026-10-02',
+  '2026-10-03',
+  '2026-10-04',
+  '2026-10-05',
+  '2026-10-06',
+  '2026-10-07',
+]
+
+/** deepseek-v4 + 法定节假日。 */
+const DEEPSEEK_CN: Schedule = {
+  ...DEEPSEEK,
+  publicHolidayDates: CN_HOLIDAYS,
+  publicHolidayName: 'Chinese public holiday',
+}
+
+describe('★ 法定节假日 —— 当天全天谷价', () => {
+  it('用户场景：10/1（周四）在常规窗口内，应为谷价而不是峰价', () => {
+    // 不带节假日 → 周四 01:00-04:00 是峰时
+    expect(currentPeriod(DEEPSEEK, utc('2026-10-01T02:00:00Z')).period).toBe('peak')
+    // 带节假日 → 全天谷价
+    expect(currentPeriod(DEEPSEEK_CN, utc('2026-10-01T02:00:00Z')).period).toBe('offPeak')
+  })
+
+  it('节假日覆盖全部常规窗口（两个窗口都要被压制）', () => {
+    for (const iso of [
+      '2026-10-01T02:00:00Z', // 01:00-04:00 窗口
+      '2026-10-02T08:00:00Z', // 06:00-10:00 窗口
+      '2026-10-05T02:30:00Z', // 周一
+    ]) {
+      expect(currentPeriod(DEEPSEEK_CN, utc(iso)).period, iso).toBe('offPeak')
+    }
+  })
+
+  it('用户场景：从 10/1 起算，下一个峰价是 10/8 01:00 UTC', () => {
+    // 7 天（10/1 00:00 → 10/8 00:00） + 1 小时（00:00 → 01:00 窗口起点）
+    const r = currentPeriod(DEEPSEEK_CN, utc('2026-10-01T00:00:00Z'))
+    expect(r.period).toBe('offPeak')
+    expect(r.nextPeriod).toBe('peak')
+    expect(r.minutesUntilSwitch).toBe(7 * 24 * 60 + 60)
+  })
+
+  it('假期最后一天：从 10/7 中午起算，13 小时后回到峰价', () => {
+    const r = currentPeriod(DEEPSEEK_CN, utc('2026-10-07T12:00:00Z'))
+    expect(r.period).toBe('offPeak')
+    expect(r.nextPeriod).toBe('peak')
+    expect(r.minutesUntilSwitch).toBe(13 * 60) // 10/8 01:00 UTC
+  })
+
+  it('10/8 恢复常规：01:00-04:00 峰、04:00-06:00 谷、06:00-10:00 峰', () => {
+    expect(currentPeriod(DEEPSEEK_CN, utc('2026-10-08T02:00:00Z')).period).toBe('peak')
+    expect(currentPeriod(DEEPSEEK_CN, utc('2026-10-08T05:00:00Z')).period).toBe('offPeak')
+    expect(currentPeriod(DEEPSEEK_CN, utc('2026-10-08T08:00:00Z')).period).toBe('peak')
+  })
+
+  it('进入假期的那一天边界即翻转（9/30 23:59 → 10/1 00:00）', () => {
+    const before = currentPeriod(DEEPSEEK_CN, utc('2026-09-30T23:59:00Z'))
+    expect(before.period).toBe('offPeak')
+    // 下一个翻转点就是假期开始（10/1 00:00），此后连续谷价 → 真正的下一次翻转是 10/8 01:00
+    expect(before.nextPeriod).toBe('peak')
+    expect(before.minutesUntilSwitch).toBe(1 + 7 * 24 * 60 + 60)
+  })
+
+  it('★ 跨午夜窗口：节假日当天的窗口整体作废，不得溢出到次日', () => {
+    // 合成：周四 22:00-02:00 跨午夜；次日周五为法定节假日
+    const sched: Schedule = {
+      timeZone: 'UTC',
+      peakDays: [4], // 仅周四
+      peakWindows: [{ start: '22:00', end: '02:00' }],
+    }
+    const withHoliday: Schedule = { ...sched, publicHolidayDates: ['2026-10-09'] } // 周五
+    // 无节假日：周五 01:00 处于「周四窗口溢出」→ 峰时
+    expect(currentPeriod(sched, utc('2026-10-09T01:00:00Z')).period).toBe('peak')
+    // 有节假日：周五整天谷价，溢出一并作废
+    expect(currentPeriod(withHoliday, utc('2026-10-09T01:00:00Z')).period).toBe('offPeak')
+    // 周四晚上本身仍按常规判峰（节假日是**次日**）
+    expect(currentPeriod(withHoliday, utc('2026-10-08T23:00:00Z')).period).toBe('peak')
+  })
+
+  it('未配置节假日时行为与改动前完全一致（回归护栏）', () => {
+    // 只在**非节假日**日期上比对：节假日日期本就该不同，不属本护栏范围。
+    for (const iso of [
+      '2026-09-24T02:00:00Z', // 假期前的周四
+      '2026-09-30T02:00:00Z', // 假期前的周三
+      '2026-10-08T02:00:00Z', // 假期后的周四
+      '2026-10-10T12:00:00Z', // 假期后的周六
+    ]) {
+      expect(currentPeriod(DEEPSEEK_CN, utc(iso)), iso).toEqual(
+        currentPeriod(DEEPSEEK, utc(iso)),
+      )
+    }
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * ★ 促销/活动覆盖的"新形态"（2026-09-30 接通）
+ *
+ * 数据源的 override 形态比初版丰富：`period` 名不止 `campaign`（还有 `promotion` /
+ * `campaign10` / …），**每个名字在 `periods` 里各有自己的 badge**；窗口可用 `allDay`
+ * 表示全天（写作 00:00-00:00）。
+ * 此前只认 `campaign` 且把零长度窗口一律丢弃 → **已映射的 zai 系当场显示错倍率**：
+ * promotion（9/25-10/7 全天 0.5×）被丢 → 工作日 14:00-18:00 误报 `peak 1×`。
+ * ------------------------------------------------------------------ */
+
+describe('★ 促销态：每个活动带自己的倍率与名称', () => {
+  /** 合成 zai 形态：北京时工作日 14:00-18:00 为峰，另有 9/25-10/7 全天 0.5× promotion。 */
+  const ZAI_LIKE: Schedule = {
+    timeZone: 'Asia/Shanghai',
+    peakDays: [1, 2, 3, 4, 5],
+    peakWindows: [{ start: '14:00', end: '18:00' }],
+    overrides: [
+      {
+        period: 'campaign',
+        periodName: 'promotion',
+        badge: '0.5×',
+        name: 'All-day off-peak',
+        startDate: '2026-09-25',
+        endDate: '2026-10-07',
+        days: [0, 1, 2, 3, 4, 5, 6],
+        // 全天窗（schedule 层把 end <= start 展开为 +1440）
+        windows: [{ start: '00:00', end: '00:00' }],
+      },
+    ],
+  }
+
+  it('★ 促销窗内的常规峰时段应为活动态，且带该活动自己的 badge', () => {
+    // 2026-09-30 是周三；07:00Z = 北京 15:00，落在常规峰窗 14:00-18:00 内
+    const r = currentPeriod(ZAI_LIKE, utc('2026-09-30T07:00:00Z'))
+    expect(r.period).toBe('campaign')
+    expect(r.activePromo?.badge).toBe('0.5×')
+    expect(r.activePromo?.periodName).toBe('promotion')
+    expect(r.activePromo?.name).toBe('All-day off-peak')
+  })
+
+  it('同一时刻去掉 override 即为 peak（证明是 override 在起作用）', () => {
+    const outside: Schedule = { ...ZAI_LIKE, overrides: [] }
+    expect(currentPeriod(outside, utc('2026-09-30T07:00:00Z')).period).toBe('peak')
+    // 10-08 已出促销区间
+    expect(currentPeriod(ZAI_LIKE, utc('2026-10-08T07:00:00Z')).period).toBe('peak')
+  })
+
+  it('全天窗口（00:00-00:00）确实覆盖整日', () => {
+    for (const iso of [
+      '2026-09-30T00:30:00Z', // 北京 08:30
+      '2026-09-30T07:00:00Z', // 北京 15:00
+      '2026-09-30T15:30:00Z', // 北京 23:30
+    ]) {
+      expect(currentPeriod(ZAI_LIKE, utc(iso)).period, iso).toBe('campaign')
+    }
+  })
+
+  it('非活动态不带 activePromo（避免 UI 拿到无关徽章）', () => {
+    expect(currentPeriod(ZAI_LIKE, utc('2026-10-08T07:00:00Z')).activePromo).toBeUndefined()
+  })
+
+  it('同一 profile 有两个促销态时，各带自己的 badge（不串用）', () => {
+    const two: Schedule = {
+      timeZone: 'Asia/Shanghai',
+      peakDays: [1, 2, 3, 4, 5],
+      peakWindows: [{ start: '14:00', end: '18:00' }],
+      overrides: [
+        {
+          period: 'campaign',
+          periodName: 'campaign',
+          badge: '2× quota',
+          days: [0, 1, 2, 3, 4, 5, 6],
+          windows: [{ start: '23:00', end: '09:00' }], // 跨午夜
+        },
+        {
+          period: 'campaign',
+          periodName: 'promotion',
+          badge: '0.5×',
+          days: [0, 1, 2, 3, 4, 5, 6],
+          windows: [{ start: '00:00', end: '00:00' }],
+        },
+      ],
+    }
+    // 北京 02:00 落在第一条（23:00-09:00）→ 第一条优先，取它的 badge
+    expect(currentPeriod(two, utc('2026-09-30T18:00:00Z')).activePromo?.badge).toBe('2× quota')
+    // 北京 15:00 只落第二条
+    expect(currentPeriod(two, utc('2026-09-30T07:00:00Z')).activePromo?.badge).toBe('0.5×')
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * ★ 节假日 × 跨午夜窗口：两个方向都要有**能变红**的用例
+ *
+ * `stateAt` 的顺序是 overrides → 节假日早退 → isPeakAt(..., prevDayIsHoliday)。
+ * 因此两个方向由不同分支负责：
+ *   ① 「非节假日傍晚起的窗口溢出**落进**节假日」→ 由节假日早退拦截（不经过参数）
+ *   ② 「节假日**当天**的跨午夜窗口溢出到次日」→ 只能由 `prevDayIsHoliday` 参数拦住
+ * 独立 review（2026-09-30）指出：此前只有 ① 的用例，删掉该参数测试依然全绿 —— ② 缺真护栏。
+ * ------------------------------------------------------------------ */
+
+describe('★ 节假日当天的跨午夜窗口不得溢出到次日（prevDayIsHoliday 的真红绿）', () => {
+  /** 合成：仅周四有 22:00-02:00 跨午夜窗；把某个周四设为法定节假日（次日周五非节假日）。 */
+  const sched: Schedule = {
+    timeZone: 'UTC',
+    peakDays: [4],
+    peakWindows: [{ start: '22:00', end: '02:00' }],
+    publicHolidayDates: ['2026-10-08'], // 2026-10-08 是周四
+  }
+
+  it('节假日当天 22:00 之后的窗口段仍是谷价', () => {
+    expect(currentPeriod(sched, utc('2026-10-08T23:00:00Z')).period).toBe('offPeak')
+  })
+
+  it('★ 次日凌晨 01:00 也是谷价（该窗口随节假日整体作废，不得溢出）', () => {
+    expect(currentPeriod(sched, utc('2026-10-09T01:00:00Z')).period).toBe('offPeak')
+  })
+
+  it('对照组：去掉节假日，同一次日凌晨 01:00 就是 peak（证明上一条靠该参数成立）', () => {
+    const noHoliday: Schedule = { ...sched, publicHolidayDates: [] }
+    expect(currentPeriod(noHoliday, utc('2026-10-09T01:00:00Z')).period).toBe('peak')
+  })
+
+  it('非节假日的那一周四，跨午夜窗照常生效（护栏：别把常规跨午夜也废掉）', () => {
+    expect(currentPeriod(sched, utc('2026-10-01T23:00:00Z')).period).toBe('peak')
+    expect(currentPeriod(sched, utc('2026-10-02T01:00:00Z')).period).toBe('peak')
+  })
+})
+
+/* ------------------------------------------------------------------ *
+ * ★ 倒计时指向"另一个促销态"时，必须用**那一刻那条**活动的倍率
+ *
+ * 曾是缺陷：`nextBadge` 走 profile 级 `campaignBadge`（单一槽位），
+ * 当两个促销态相邻（zai：campaign 23:00-09:00 与 promotion 全天）时会显示另一个活动的倍率。
+ * ------------------------------------------------------------------ */
+describe('★ nextActivePromo：翻转点落在某条活动上时用它自己的倍率', () => {
+  // 两个**时段不重叠**的活动（周六 / 周日各一段），从常规态翻转进入时必须取对应那条的 badge。
+  // 曾有的缺陷：`nextBadge` 走 profile 级单一 `campaignBadge`，两个活动会串用。
+  const two: Schedule = {
+    timeZone: 'Asia/Shanghai',
+    peakDays: [1, 2, 3, 4, 5],
+    peakWindows: [{ start: '14:00', end: '18:00' }],
+    overrides: [
+      {
+        period: 'campaign',
+        periodName: 'campaignA',
+        badge: 'A',
+        days: [6], // 周六
+        windows: [{ start: '09:00', end: '12:00' }],
+      },
+      {
+        period: 'campaign',
+        periodName: 'campaignB',
+        badge: 'B',
+        days: [0], // 周日
+        windows: [{ start: '09:00', end: '12:00' }],
+      },
+    ],
+  }
+
+  it('周六 08:00（常规谷价）→ 下一个翻转点是活动 A，取其自己的 badge', () => {
+    // 2026-10-03 是周六；北京 08:00 = UTC 00:00
+    const r = currentPeriod(two, utc('2026-10-03T00:00:00Z'))
+    expect(r.period).toBe('offPeak')
+    expect(r.activePromo).toBeUndefined()
+    expect(r.nextPeriod).toBe('campaign')
+    expect(r.nextActivePromo?.badge, '应取周六那条活动的倍率').toBe('A')
+  })
+
+  it('周日 08:00 → 下一个翻转点是活动 B，取其自己的 badge（不串用）', () => {
+    // 2026-10-04 是周日
+    const r = currentPeriod(two, utc('2026-10-04T00:00:00Z'))
+    expect(r.period).toBe('offPeak')
+    expect(r.nextPeriod).toBe('campaign')
+    expect(r.nextActivePromo?.badge).toBe('B')
+  })
+
+  it('活动内：当前与下一个都是同一活动（不误报 nextActivePromo）', () => {
+    // 周六 10:00（活动 A 内）→ 12:00 结束后回到常规谷价，故无 nextActivePromo
+    const r = currentPeriod(two, utc('2026-10-03T02:00:00Z'))
+    expect(r.activePromo?.badge).toBe('A')
+    expect(r.nextActivePromo).toBeUndefined()
+  })
+})

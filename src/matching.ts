@@ -17,9 +17,22 @@ export interface RateProfile {
     peakDays: number[]
     peakWindows: { start: string; end: string }[]
     offDayName?: string
-    /** 带日期区间的覆盖段（活动窗口）；优先级高于常规峰谷。 */
+    /** 法定节假日（`YYYY-MM-DD`，本 schedule 时区）；当天全天谷价。见 `schedule.ts`。 */
+    publicHolidayDates?: string[]
+    /** 节假日的展示名；目前仅透传。 */
+    publicHolidayName?: string
+    /** 节假日依据的日历时区（峰价时区与节假日日历可能不同）；见 `schedule.ts`。 */
+    publicHolidayTimeZone?: string
+    /** 带日期区间的覆盖段（活动/促销窗口）；优先级高于节假日与常规峰谷。 */
     overrides?: {
+      /** 归一化三态；促销类 period 一律落到 `campaign`。 */
       period: 'peak' | 'offPeak' | 'campaign'
+      /** 数据源里的原始 period 名（`promotion` / `campaign10` / …）。 */
+      periodName?: string
+      /** 该活动自己的倍率徽章（同一 profile 可有多个促销态，各倍率不同）。 */
+      badge?: string
+      name?: string
+      detail?: string
       startDate?: string
       endDate?: string
       days: number[]
@@ -58,12 +71,25 @@ export interface MatchConfig {
 /**
  * 内置 provider 别名：DSH 的 provider id → 数据源里的 provider 展示名。
  *
- * 数据源里只覆盖 8 家 provider；本机配置中的 openrouter / ocg / opencode-go /
- * 转售/网关类 provider（如 OpenCode Go）**继承上游时段**，故显式映射到上游 profile；
+ * 数据源覆盖的 provider 家数**随其收录范围变化**（2026-09-11 版 8 家 → 2026-09-28 版 13 家：
+ * 新增 AIHubMix、Baidu Qianfan、above.dev 等）——**数量不是契约**，本表按需增补。
+ * 本机配置中的 openrouter / ocg / opencode-go / 转售/网关类 provider（如 OpenCode Go）
+ * **继承上游时段**，故显式映射到上游 profile；
  * 仅当某 provider 确实没有时段计价时才不映射，且必须写明理由（见 UNMATCHED_BY_DESIGN）。
+ *
+ * 注意：数据源新收录的 provider 若既无别名也未进 `UNMATCHED_BY_DESIGN`，属"未登记"，
+ * 由 `scripts/audit-coverage.mjs`（运行时穷举）在覆盖面板里以告警暴露。
  */
 export const DEFAULT_PROVIDER_ALIASES: Record<string, string> = {
   'deepseek-official': 'DeepSeek',
+  // DSH 的「DeepSeek Account」provider（浏览器 PKCE 登录）。它与 deepseek-official
+  // **共用同一个适配器与同一份模型目录** —— @deepseek-ai/dsh-llm-deepseek-account 从
+  // @deepseek-ai/dsh-llm-deepseek 导入 Config / resolveAdapterOptions / registerDeepSeekProvider，
+  // discoverModels 直接返回 connection.models；**唯一差别是鉴权**（账号 token
+  // `x-dsh-auth-token` vs API key）→ 计费与官网 API 同源，峰谷窗口同样适用。
+  // 依据：https://api-docs.deepseek.com/quick_start/pricing/ 的 Deduction Rules
+  //（「deducted from your topped-up balance or granted balance」；off-peak = peak 的一半）。
+  'deepseek-account': 'DeepSeek',
   // OpenCode Go（opencode.ai/zen/go）转售 DeepSeek V4 系，其官方文档载明
   // 峰值窗口与 DeepSeek 官方**完全一致**（UTC 01:00-04:00 / 06:00-10:00，周一至周五，
   // 倍率同为 2×）——故归入 DeepSeek profile。
@@ -93,6 +119,9 @@ export const DEFAULT_PROVIDER_ALIASES: Record<string, string> = {
 export const DEFAULT_MODEL_MAPPINGS: ModelMapping[] = [
   { provider: 'deepseek-official', match: 'deepseek-v4', profile: 'deepseek-v4' },
   { provider: 'deepseek-official', match: 'deepseek-flash', profile: 'deepseek-v4' },
+  // DeepSeek Account 与 deepseek-official 共用模型目录（deepseek-flash / deepseek-v4-pro）
+  { provider: 'deepseek-account', match: 'deepseek-v4', profile: 'deepseek-v4' },
+  { provider: 'deepseek-account', match: 'deepseek-flash', profile: 'deepseek-v4' },
   // OpenCode Go 的 DeepSeek 系（含 vision-exp）→ 同一 profile
   { provider: 'ocg', match: 'deepseek-v4', profile: 'deepseek-v4' },
   { provider: 'ocg', match: 'deepseek-flash', profile: 'deepseek-v4' },

@@ -69,10 +69,32 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 try {
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForTimeout(10_000)
-  await page.click('text=设置')
-  await page.waitForTimeout(2_000)
-  await page.click('text=模型峰谷倍率')
-  await page.waitForTimeout(2_500)
+
+  // 导航到本插件的配置面板。
+  //
+  // **0.3.0 起路径变了**：面板从「设置 → 模型峰谷倍率」搬到了
+  // **「插件」面板里本插件自己的详情页**（侧栏 → 插件 → `dsh-peakrate`），
+  // 上游已删掉旧的设置页签。此处按新路径走（2026-09-30 修）。
+  //
+  // 两个坑：
+  //  1. 侧栏里也有同名的工作区条目（`dsh-peakrate` 仓库本身是个工作区），
+  //     用 `page.click('text=插件')` / `text=dsh-peakrate` 会命中错元素 → 都在面板内按精确文本找。
+  //  2. 插件卡片的 class 是 CSS module 哈希（如 `ZVcBiW_cardTitle`），**不能写死哈希**，
+  //     只按语义片段 `cardTitle` 匹配。
+  const clickSidebarItem = async (label) => {
+    const ok = await page.evaluate((want) => {
+      const nodes = [...document.querySelectorAll('button,[role=button],a,[role=tab]')]
+      const el = nodes.find((e) => (e.innerText || '').trim() === want)
+      if (el === undefined) return false
+      el.click()
+      return true
+    }, label)
+    if (!ok) throw new Error(`侧栏里找不到「${label}」`)
+    await page.waitForTimeout(2_500)
+  }
+  await clickSidebarItem('插件')
+  await page.click('button[class*="cardTitle"]:has-text("dsh-peakrate")', { timeout: 20_000 })
+  await page.waitForTimeout(3_000)
 
   const out = await page.evaluate(() => {
     const tbody = document.querySelector('.dsh-peakrate-settings-table tbody')

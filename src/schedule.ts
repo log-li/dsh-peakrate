@@ -20,6 +20,25 @@ export interface Schedule {
   peakDays: number[]
   peakWindows: PeakWindow[]
   offDayName?: string
+  /**
+   * 上游标注的**法定节假日**（`YYYY-MM-DD`，按本 schedule 的时区）。
+   *
+   * 语义（2026-09-30 补）：当天**全天谷价** —— 依据上游价目页
+   * 「All other hours are off-peak, including weekends and Chinese public holidays **in full**」。
+   * 数据源当前只在 4 个 DeepSeek 系 profile 上带此字段（`deepseek-v4` /
+   * `alibaba-model-studio-deepseek-v4` / `bai-deepseek-v4` / `bai-deepseek-v4-pro`），
+   * 且这 4 个的窗口都**不跨午夜**；跨午夜的交互仍按下述规则处理。
+   */
+  publicHolidayDates?: string[]
+  /** 节假日的展示名（如 "Chinese public holiday"）；目前仅透传，UI 未消费（同 `offDayName`）。 */
+  publicHolidayName?: string
+  /**
+   * 节假日所依据的**日历时区**（如 `deepseek-v4` 峰价按 `UTC`、节假日按 `Asia/Shanghai`）。
+   *
+   * 声明它是因为数据源明确带此字段；不消费会让节假日日界按 profile 时区错判
+   * （当前数据窗口小时在两套解释下重合，故无实害，但边界小时会差 8 小时）。
+   */
+  publicHolidayTimeZone?: string
   /** 优先级高于常规峰谷的覆盖段（活动窗口等）。 */
   overrides?: ScheduleOverride[]
 }
@@ -30,14 +49,29 @@ export interface Schedule {
  */
 export type Period = 'peak' | 'offPeak' | 'campaign'
 
-/** 带日期区间与星期过滤的时段覆盖（目前只有 campaign 用）。 */
+/** 带日期区间与星期过滤的时段覆盖（活动/促销窗口）。 */
 export interface ScheduleOverride {
+  /** 归一化后的三态：`peak` / `offPeak` / `campaign`（一切促销类 period 都落到 `campaign`）。 */
   period: Period
+  /** 数据源里的**原始 period 名**（如 `promotion` / `campaign10`），仅用于展示与排查。 */
+  periodName?: string
+  /**
+   * 该活动**自己的**倍率徽章（取自数据源 `periods[<periodName>].badge`）。
+   *
+   * 必须有：同一 profile 里可能有多个促销态（如 zai 的 `campaign` 与 `promotion`），
+   * 各有各的倍率 —— 只用 profile 级的单一 `campaignBadge` 槽位会显示错。
+   */
+  badge?: string
+  /** 该活动的显示名（取自 `periods[<periodName>].name`）。 */
+  name?: string
+  /** 该活动的补充说明（取自 `periods[<periodName>].detail`）。 */
+  detail?: string
   /** 起止日期（`YYYY-MM-DD`，按 profile 自身时区，闭区间）；缺省表示不限日期。 */
   startDate?: string
   endDate?: string
   /** 0=周日 … 6=周六；空/缺省表示每天。 */
   days: number[]
+  /** 生效窗口；全天生效写作 `{start:'00:00', end:'00:00'}`（`normalizedWindowsOf` 会展开为 1440）。 */
   windows: PeakWindow[]
 }
 
@@ -53,6 +87,32 @@ export interface PeriodResult {
    * 无下一个翻转点（如永不切换的规则）时为 undefined。
    */
   nextPeriod?: Period
+  /**
+   * 当前生效的活动/促销的展示信息（仅在 `period === 'campaign'` 时有值）。
+   *
+   * 为什么不复用 profile 级的 `campaignBadge`：同一 profile 可有多个促销态
+   * （如 zai 的 `campaign` 与 `promotion`），各有各的倍率 —— 必须给出**当前生效那条**
+   * 自己的 badge/name，否则 UI 会显示另一个活动的倍率。
+   */
+  activePromo?: {
+    periodName?: string
+    badge?: string
+    name?: string
+    detail?: string
+  }
+  /**
+   * 翻转点之后生效的活动信息（仅当那一刻确实落进另一条 override 时有值）。
+   *
+   * 与 `activePromo` 同理：倒计时说"多久之后变成什么倍率"，那个倍率也必须是**那一刻那条活动
+   * 自己的**。否则两个促销态相邻时（如 zai 的 campaign 23:00-09:00 与 promotion 全天），
+   * 倒计时会显示另一个活动的倍率。
+   */
+  nextActivePromo?: {
+    periodName?: string
+    badge?: string
+    name?: string
+    detail?: string
+  }
 }
 
 /** 把 "HH:mm" 解析为当天分钟数；非法输入返回 NaN。 */
@@ -179,6 +239,37 @@ function isPeakDay(schedule: Schedule, weekday: number): boolean {
   return schedule.peakDays.includes(weekday)
 }
 
+/**
+ * 该日期（`YYYY-MM-DD`，profile 自身时区）是否为上游标注的法定节假日。
+ *
+ * 节假日**全天谷价**（上游明示 "in full"）→ 常规星期/窗口判定一律作废。
+ */
+function isPublicHoliday(schedule: Schedule, date: string): boolean {
+  return (schedule.publicHolidayDates ?? []).includes(date)
+}
+
+/**
+ * 求某时刻对应的**节假日日历日**。
+ *
+ * 数据源里节假日有自己的时区（`publicHolidayTimeZone`，如 `deepseek-v4` 峰价按 `UTC`
+ * 而节假日按 `Asia/Shanghai`）。峰价窗口与节假日日界分属两个时区时，必须各自按本时区
+ * 取"当天"，否则节假日边界会整体偏移（当前数据巧合无差 —— 窗口小时在两套解释下重合，
+ * 但边界小时会差 8 小时，倒计时跟着错）。
+ *
+ * @param schedule - 时段规则。
+ * @param now - 基准时刻。
+ * @param localDate - 已算好的 profile 时区日期（无节假日或未声明时区时直接沿用）。
+ */
+function holidayDateFor(schedule: Schedule, now: Date, localDate: string): string {
+  const tz = schedule.publicHolidayTimeZone
+  if (tz === undefined || (schedule.publicHolidayDates?.length ?? 0) === 0) return localDate
+  try {
+    return wallClock(now, tz).date
+  } catch {
+    return localDate
+  }
+}
+
 /** 归一化窗口为当天的 [start, end) 分钟区间（end 跨午夜时按 +1440 处理）。 */
 function normalizedWindows(schedule: Schedule): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = []
@@ -211,12 +302,19 @@ function minutesUntilFlip(
   now: Date,
   weekday: number,
   minutes: number,
-): { minutes: number; period: Period } | undefined {
+): { minutes: number; period: Period; override?: ScheduleOverride } | undefined {
   const windows = normalizedWindows(schedule)
   if (windows.length === 0) return undefined
 
   const baseDate = wallClock(now, schedule.timeZone).date
-  const currentState = stateAt(schedule, windows, weekday, minutes, baseDate)
+  const currentState = stateAt(
+    schedule,
+    windows,
+    weekday,
+    minutes,
+    baseDate,
+    holidayDateFor(schedule, now, baseDate),
+  )
 
   // 只在「候选时刻」上判定状态变化即可——相邻候选之间的状态恒定。
   //
@@ -267,19 +365,32 @@ function minutesUntilFlip(
     // 未来性判定：候选的绝对分钟数须晚于「现在」（今天是 0 基准）。
     if (p.absolute <= minutes) continue
     const dayAt = (weekday + p.dayOffset) % 7
+    const candidateDate = addDays(baseDate, p.dayOffset)
+    // **先解析时间戳再判状态**：节假日日界可能属于另一个时区（`publicHolidayTimeZone`），
+    // 必须按候选时刻的真实时间戳换算，否则边界小时会偏移（见 holidayDateFor）。
+    const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
+    if (ts === undefined) continue
     const stateAfter = stateAt(
       schedule,
       windows,
       dayAt,
       p.minuteOfDay,
-      addDays(baseDate, p.dayOffset),
+      candidateDate,
+      holidayDateFor(schedule, new Date(ts), candidateDate),
     )
     if (stateAfter === currentState) continue
 
-    const ts = wallClockToTimestamp(schedule.timeZone, now, p.dayOffset, p.minuteOfDay)
-    if (ts === undefined) continue
     const deltaMs = ts - now.getTime()
-    if (deltaMs > 0) return { minutes: Math.round(deltaMs / 60000), period: stateAfter }
+    if (deltaMs > 0) {
+      // 一并给出翻转点上生效的 override（若翻过去也是促销态）—— 让倒计时能显示**那个**活动的
+      // 倍率，而不是 profile 级回落槽位里另一个活动的。
+      const flipOverride = activeOverrideAt(schedule, dayAt, p.minuteOfDay, candidateDate)
+      return {
+        minutes: Math.round(deltaMs / 60000),
+        period: stateAfter,
+        ...(flipOverride === undefined ? {} : { override: flipOverride }),
+      }
+    }
   }
   return undefined
 }
@@ -308,16 +419,16 @@ function normalizedWindowsOf(list: PeakWindow[]): { start: number; end: number }
 }
 
 /**
- * 判定某时刻的**完整时段状态**（含活动覆盖）。
+ * 判定某时刻的**完整时段状态**（含活动覆盖与法定节假日）。
  *
- * **override 优先于常规峰谷**：任一 override 生效时直接返回它的 `period`；
- * 否则退回 `isPeakAt` 的峰/谷判定。
+ * 优先级：**override（活动/促销） > 法定节假日 > 常规峰谷**。
  *
  * @param schedule - 时段规则。
  * @param windows - 已归一化的常规窗口。
  * @param weekday - 当天星期。
  * @param minutes - 当天第几分钟。
  * @param date - 当天日期（profile 时区，`YYYY-MM-DD`）。
+ * @param holidayDate - 该时刻对应的节假日日历日（见 `holidayDateFor`；缺省同 `date`）。
  */
 function stateAt(
   schedule: Schedule,
@@ -325,14 +436,59 @@ function stateAt(
   weekday: number,
   minutes: number,
   date: string,
+  /**
+   * 该时刻对应的**节假日日历日**（可能来自另一个时区，见 `holidayDateFor`）。
+   * 缺省等于 `date`（无 `publicHolidayTimeZone` 时的退化行为）。
+   */
+  holidayDate: string = date,
 ): Period {
-  // 前一天的星期/日期：跨午夜窗口的凌晨段归属**开始日**
+  const override = activeOverrideAt(schedule, weekday, minutes, date)
+  if (override !== undefined) return override.period
+  // 法定节假日：**全天谷价**（按节假日自己的日历时区判定）。优先级低于显式 override
+  // （override 是同一份数据源里日期/窗口级更具体的规则），高于常规星期/窗口判定。
+  // 注意：这里先判 holiday 再算 isPeakAt，故「非节假日傍晚起的跨午夜窗口溢出到节假日凌晨」
+  // 会被本条直接拦成谷价（正确：节假日整天都便宜）。
+  if (isPublicHoliday(schedule, holidayDate)) return 'offPeak'
+  // 反过来：前一天是节假日 → 它的跨午夜窗口整体作废，不得溢出到今日。
+  return isPeakAt(
+    schedule,
+    windows,
+    weekday,
+    minutes,
+    isPublicHoliday(schedule, addDays(holidayDate, -1)),
+  )
+    ? 'peak'
+    : 'offPeak'
+}
+
+/**
+ * 取某时刻**生效的那条 override**（无则 undefined）。
+ *
+ * 抽成独立函数是为了让三处共用同一判定：`stateAt`（判态）、`currentPeriod`（当前活动的
+ * badge/name）、`minutesUntilFlip`（**下一个**活动的 badge）—— 三处各写一遍必然漂移。
+ */
+function activeOverrideAt(
+  schedule: Schedule,
+  weekday: number,
+  minutes: number,
+  date: string,
+): ScheduleOverride | undefined {
   const prevWeekday = (weekday + 6) % 7
   const prevDate = addDays(date, -1)
-  for (const o of schedule.overrides ?? []) {
-    if (overrideActive(o, weekday, minutes, date, prevWeekday, prevDate)) return o.period
+  return (schedule.overrides ?? []).find((o) =>
+    overrideActive(o, weekday, minutes, date, prevWeekday, prevDate),
+  )
+}
+
+/** 把一条 override 的展示信息转成 `PeriodResult.activePromo` 形态。 */
+function promoInfoOf(o: ScheduleOverride | undefined): PeriodResult['activePromo'] {
+  if (o === undefined) return undefined
+  return {
+    ...(o.periodName === undefined ? {} : { periodName: o.periodName }),
+    ...(o.badge === undefined ? {} : { badge: o.badge }),
+    ...(o.name === undefined ? {} : { name: o.name }),
+    ...(o.detail === undefined ? {} : { detail: o.detail }),
   }
-  return isPeakAt(schedule, windows, weekday, minutes) ? 'peak' : 'offPeak'
 }
 
 /**
@@ -355,10 +511,15 @@ function isPeakAt(
   windows: { start: number; end: number }[],
   weekday: number,
   minutes: number,
+  /**
+   * 前一天是否为法定节假日。为 true 时**跳过「前一天跨午夜窗口的溢出」** ——
+   * 节假日当天全天谷价，其窗口（含跨午夜那部分）整体作废，不能靠溢出把次日照样判成峰时。
+   */
+  prevDayIsHoliday = false,
 ): boolean {
   // 前一天的跨午夜窗口溢出到今天的部分（今天 00:00 起）
   const prevDay = (weekday + 6) % 7
-  if (isPeakDay(schedule, prevDay)) {
+  if (isPeakDay(schedule, prevDay) && !prevDayIsHoliday) {
     for (const w of windows) {
       if (w.end > 1440 && minutes < w.end - 1440) return true
     }
@@ -458,14 +619,25 @@ function tzOffsetMs(timeZone: string, at: Date): number {
  */
 export function currentPeriod(schedule: Schedule, now: Date): PeriodResult {
   const { weekday, minutes, date } = wallClock(now, schedule.timeZone)
+  const holidayDate = holidayDateFor(schedule, now, date)
   // 与 minutesUntilFlip 共用同一判定函数，保证「时段」与「倒计时」语义一致
   // （两者若各算各的，跨午夜窗口处会出现「说自己是 peak 却倒计时到明天」的矛盾）。
-  const period = stateAt(schedule, normalizedWindows(schedule), weekday, minutes, date)
+  const period = stateAt(schedule, normalizedWindows(schedule), weekday, minutes, date, holidayDate)
   const flip = minutesUntilFlip(schedule, now, weekday, minutes)
+
+  // 促销态：把**当前 / 下一个生效的那条 override 自己的** period 名与 badge/name 一并外露，
+  // 让 UI 显示该活动自己的倍率（而非 profile 级那个单一回落槽位 —— 同一 profile 可有多个
+  // 促销态且倍率不同，只靠它必然对不上其中之一）。
+  const activePromo = period === 'campaign' ? promoInfoOf(activeOverrideAt(schedule, weekday, minutes, date)) : undefined
+  // 下一个状态若也是促销态，同样要给它自己的 badge（否则倒计时会显示另一个活动的倍率）
+  const nextActivePromo = promoInfoOf(flip?.override)
+
   return {
     period,
     minutesUntilSwitch: flip?.minutes ?? Number.POSITIVE_INFINITY,
     ...(flip === undefined ? {} : { nextPeriod: flip.period }),
+    ...(activePromo === undefined ? {} : { activePromo }),
+    ...(nextActivePromo === undefined ? {} : { nextActivePromo }),
   }
 }
 

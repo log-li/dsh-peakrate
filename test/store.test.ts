@@ -10,11 +10,32 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CatalogStore, type Config } from '../src/index.js'
 
-/** 造一份合法数据源，profile id 可指定，便于断言来源。 */
-function catalog(profileId: string, schemaVersion = 1) {
+/**
+ * 内置快照的 `updatedAt`（`data/pricing.json`）。
+ *
+ * **为什么测试要读它而不是写死日期**：`CatalogStore.load()` 的优先级是
+ * 「缓存比内置快照旧 → 丢弃缓存改用快照」；内置快照每次 release 都会从数据源
+ * 重新同步，日期会变。若夹具写死一个日期，快照一刷新就会从「合法缓存」变成
+ * 「过期缓存」，用例随之**假性失败**（2026-09-30 实测：刷新快照后 3 个用例翻转）。
+ * 凡是要表达「这份缓存是有效的」，都应以快照日期为基准。
+ */
+function snapshotUpdatedAt(): string {
+  return JSON.parse(
+    readFileSync(fileURLToPath(new URL('../data/pricing.json', import.meta.url)), 'utf8'),
+  ).updatedAt
+}
+
+/**
+ * 造一份合法数据源，profile id 可指定，便于断言来源。
+ *
+ * `updatedAt` 默认取**内置快照同款日期** —— 表达「这份缓存不旧于快照，属有效缓存」，
+ * 这样用例不受快照同步日期影响。要表达「过期缓存」请显式传更早的日期
+ * （见文件末尾的『缓存过期检查』一组）。
+ */
+function catalog(profileId: string, schemaVersion = 1, updatedAt = snapshotUpdatedAt()) {
   return {
     schemaVersion,
-    updatedAt: '2026-09-11',
+    updatedAt,
     profiles: [
       {
         id: profileId,
@@ -242,21 +263,15 @@ describe('★ 回归：缓存过期检查（过期缓存不得压过新快照）
     store.load()
     const ids = store.profiles().map((p) => p.id)
     expect(ids).not.toContain('stale-entry')
-    // 内置快照有 14 个 profile
+    // 内置快照应有多个 profile（数量随数据源同步而变，故只断言下界）
     expect(ids.length).toBeGreaterThan(10)
   })
 
   it('缓存与快照 updatedAt 相同 → 仍用缓存（缓存是远端拉取的结果）', () => {
     const path = tempCachePath()
-    const snapshotUpdatedAt = JSON.parse(
-      readFileSync(
-        fileURLToPath(new URL('../data/pricing.json', import.meta.url)),
-        'utf8',
-      ),
-    ).updatedAt
     writeFileSync(
       path,
-      JSON.stringify({ ...catalog('same-date'), updatedAt: snapshotUpdatedAt }),
+      JSON.stringify({ ...catalog('same-date'), updatedAt: snapshotUpdatedAt() }),
       'utf8',
     )
     const store = new CatalogStore({ cachePath: path }, silent)

@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-09-11",
+  "updatedAt": "2026-09-28",
   "defaultProfile": "deepseek-v4",
   "profiles": [
     {
       "id": "deepseek-v4",
       "slug": "deepseek",
       "provider": "DeepSeek",
-      "model": "V4.1 Flash + V4 Pro 0813",
+      "model": "V4.1 Flash (Pro alias routed to Flash rates)",
       "product": "API",
       "shortName": "DS",
       "title": "DeepSeek Flash / Pro pricing clock",
       "subtitle": "DeepSeek API pricing hours in your local time",
-      "kicker": "V4.1 Flash and V4 Pro 0813 · peak rates are 2× off-peak",
+      "kicker": "V4.1 Flash · V4 Pro alias uses Flash rates from Sep 14",
       "schedule": {
         "timeZone": "UTC",
         "peakDays": [1, 2, 3, 4, 5],
@@ -20,11 +20,49 @@
           { "start": "01:00", "end": "04:00" },
           { "start": "06:00", "end": "10:00" }
         ],
+        "publicHolidayDates": [
+          "2026-01-01",
+          "2026-01-02",
+          "2026-01-03",
+          "2026-02-15",
+          "2026-02-16",
+          "2026-02-17",
+          "2026-02-18",
+          "2026-02-19",
+          "2026-02-20",
+          "2026-02-21",
+          "2026-02-22",
+          "2026-02-23",
+          "2026-04-04",
+          "2026-04-05",
+          "2026-04-06",
+          "2026-05-01",
+          "2026-05-02",
+          "2026-05-03",
+          "2026-05-04",
+          "2026-05-05",
+          "2026-06-19",
+          "2026-06-20",
+          "2026-06-21",
+          "2026-09-25",
+          "2026-09-26",
+          "2026-09-27",
+          "2026-10-01",
+          "2026-10-02",
+          "2026-10-03",
+          "2026-10-04",
+          "2026-10-05",
+          "2026-10-06",
+          "2026-10-07"
+        ],
+        "publicHolidayName": "Chinese public holiday",
+        "publicHolidayTimeZone": "Asia/Shanghai",
+        "publicHolidaySource": "https://english.www.gov.cn/policies/featured/202511/04/content_WS6909c915c6d00ca5f9a074f7.html",
         "windowName": "peak",
         "offDayName": "Weekend",
         "sourceTitle": "Peak hours (UTC):",
         "sourceWindows": "01:00–04:00 · 06:00–10:00",
-        "sourceNote": "Mon–Fri · off-peak is half the peak rate · legacy V4 Flash and Vision IDs now route to V4.1 Flash · V4 Pro 0813 routes to V4.1 Flash from Sep 14, 2026 · no published end date"
+        "sourceNote": "Mon–Fri except Chinese public holidays · weekends and public holidays are fully off-peak · off-peak is half the peak rate · legacy V4 Flash and Vision IDs are retired and route to V4.1 Flash · the Sep 10, 2026 release notice says deepseek-v4-pro requests route to V4.1-Flash rates from Sep 14, 2026 at 04:00 UTC until V4.1-Pro launches; the live pricing table still shows a Pro reference column, so this profile displays the current effective Flash schedule for both aliases · no published end date for peak/off-peak or the V4.1-Pro launch"
       },
       "periods": {
         "peak": {
@@ -41,7 +79,7 @@
         }
       },
       "source": "https://api-docs.deepseek.com/quick_start/pricing/",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "ollama-deepseek-v4",
@@ -80,18 +118,98 @@
         }
       },
       "source": "https://ollama.com/pricing",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
-      "id": "bai-deepseek-v4",
-      "slug": "bai",
-      "provider": "B.AI",
-      "model": "DeepSeek-V4.1-Flash + DeepSeek V4 Pro",
+      "id": "above-deepseek-v4",
+      "slug": "above",
+      "provider": "above.dev",
+      "model": "DeepSeek V4.1 Flash / V4 Flash Vision (Exp) / V4 Pro",
+      "product": "Cloud API",
+      "shortName": "AB",
+      "title": "above.dev DeepSeek pricing clock",
+      "subtitle": "above.dev DeepSeek pricing hours in your local time",
+      "kicker": "DeepSeek gateway · peak rates are 2× off-peak",
+      "schedule": {
+        "timeZone": "UTC",
+        "dayTimeZone": "Asia/Shanghai",
+        "peakDays": [1, 2, 3, 4, 5],
+        "peakWindows": [
+          { "start": "01:00", "end": "04:00" },
+          { "start": "06:00", "end": "10:00" }
+        ],
+        "windowName": "peak",
+        "offDayName": "Weekend",
+        "sourceTitle": "Peak hours (UTC):",
+        "sourceWindows": "01:00–04:00 · 06:00–10:00",
+        "sourceNote": "DeepSeek-style UTC windows · above.dev defines weekends in Beijing time (off-peak from Fri 16:00 UTC through Sun 16:00 UTC) · current docs do not expose the previous flat 10% markup, so that markup is unverified · Chinese public-holiday treatment is not stated · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Peak rate",
+          "status": "Peak rate is active now",
+          "badge": "2×",
+          "detail": "2× the off-peak rate"
+        },
+        "offPeak": {
+          "name": "Off-peak rate",
+          "status": "Off-peak rate is active now",
+          "badge": "1×",
+          "detail": "Base rate; above.dev markup is not stated in the current docs"
+        }
+      },
+      "source": "https://above.dev/docs",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "aihubmix-deepseek-v4-1-flash",
+      "slug": "aihubmix",
+      "provider": "AIHubMix",
+      "model": "DeepSeek V4.1 Flash",
       "product": "API",
-      "shortName": "BAI",
-      "title": "B.AI DeepSeek V4 pricing clock",
-      "subtitle": "B.AI API pricing hours in your local time",
-      "kicker": "V4.1 Flash and V4 Pro · busy rates are 2× idle",
+      "shortName": "AH",
+      "title": "AIHubMix DeepSeek pricing clock",
+      "subtitle": "AIHubMix DeepSeek pricing hours in your local time",
+      "kicker": "V4.1 Flash · peak rates are 2× off-peak",
+      "schedule": {
+        "timeZone": "UTC",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "01:00", "end": "04:00" },
+          { "start": "06:00", "end": "10:00" }
+        ],
+        "windowName": "peak",
+        "sourceTitle": "Peak windows (UTC):",
+        "sourceWindows": "01:00–04:00 · 06:00–10:00",
+        "sourceNote": "AIHubMix DeepSeek V4.1 Flash route · the aggregate pricing table shows peak windows 01:00–04:00 and 06:00–10:00 UTC, with off-peak at all other hours · provider-specific routes on the same page publish different windows, so this aggregate schedule is approximate and should be treated as unverified for a chosen route · the page's 30% promotion had a published end date of Sep 27, 2026 and is now expired; no start time was published, so it is not encoded · no published end date for the aggregate schedule"
+      },
+      "periods": {
+        "peak": {
+          "name": "Peak rate",
+          "status": "Peak rate is active now",
+          "badge": "2×",
+          "detail": "2× the off-peak rate"
+        },
+        "offPeak": {
+          "name": "Off-peak rate",
+          "status": "Off-peak rate is active now",
+          "badge": "1×",
+          "detail": "Base rate"
+        }
+      },
+      "source": "https://aihubmix.com/model/deepseek-v4.1-flash",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "alibaba-model-studio-deepseek-v4",
+      "slug": "alibaba-model-studio",
+      "provider": "Alibaba Cloud Model Studio",
+      "model": "DeepSeek V4.1 Flash / V4 Flash 0731 / V4 Pro 0813",
+      "product": "Model Studio API",
+      "shortName": "AL",
+      "title": "Alibaba Model Studio DeepSeek clock",
+      "subtitle": "Alibaba Cloud DeepSeek busy hours in your local time",
+      "kicker": "DeepSeek API · busy rates are 2× idle",
       "schedule": {
         "timeZone": "Asia/Shanghai",
         "peakDays": [1, 2, 3, 4, 5],
@@ -99,11 +217,160 @@
           { "start": "09:00", "end": "12:00" },
           { "start": "14:00", "end": "18:00" }
         ],
+        "publicHolidayDates": [
+          "2026-01-01", "2026-01-02", "2026-01-03",
+          "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+          "2026-04-04", "2026-04-05", "2026-04-06",
+          "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+          "2026-06-19", "2026-06-20", "2026-06-21",
+          "2026-09-25", "2026-09-26", "2026-09-27",
+          "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
+        ],
+        "publicHolidayName": "Chinese public holiday",
+        "publicHolidayTimeZone": "Asia/Shanghai",
+        "publicHolidaySource": "https://english.www.gov.cn/policies/featured/202511/04/content_WS6909c915c6d00ca5f9a074f7.html",
+        "windowName": "busy",
+        "offDayName": "Weekend",
+        "sourceTitle": "Busy hours (Beijing):",
+        "sourceWindows": "09:00–12:00 · 14:00–18:00",
+        "sourceNote": "Busy prices are 2× idle prices · 2026-08-17 effective date for V4 Flash 0731 · Alibaba's model pages publish busy/idle rates but not the hours, so the displayed DeepSeek weekday/public-holiday schedule is inferred and unverified · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Busy rate",
+          "status": "Busy rate is active now",
+          "badge": "2× idle",
+          "detail": "2× the idle rate"
+        },
+        "offPeak": {
+          "name": "Idle rate",
+          "status": "Idle rate is active now",
+          "badge": "1× idle",
+          "detail": "Base rate"
+        }
+      },
+      "source": "https://help.aliyun.com/en/model-studio/deepseek-v4-1-flash",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-deepseek-v4",
+      "slug": "bai",
+      "provider": "B.AI",
+      "model": "DeepSeek-V4.1-Flash",
+      "product": "API",
+      "shortName": "BAI",
+      "title": "B.AI DeepSeek Flash pricing clock",
+      "subtitle": "B.AI Flash campaign hours in your local time",
+      "kicker": "V4.1 Flash · B.AI campaign rate changes Sep 25",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [1, 2, 3, 4, 5],
+        "peakWindows": [
+          { "start": "09:00", "end": "12:00" },
+          { "start": "14:00", "end": "18:00" }
+        ],
+        "publicHolidayDates": [
+          "2026-01-01", "2026-01-02", "2026-01-03",
+          "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+          "2026-04-04", "2026-04-05", "2026-04-06",
+          "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+          "2026-06-19", "2026-06-20", "2026-06-21",
+          "2026-09-25", "2026-09-26", "2026-09-27",
+          "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
+        ],
+        "publicHolidayName": "Chinese public holiday",
+        "publicHolidayTimeZone": "Asia/Shanghai",
+        "publicHolidaySource": "https://english.www.gov.cn/policies/featured/202511/04/content_WS6909c915c6d00ca5f9a074f7.html",
+        "overrides": [
+          {
+            "period": "campaign10",
+            "startAt": "2026-09-12T10:00:00+08:00",
+            "endAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          },
+          {
+            "period": "campaign30",
+            "startAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
         "windowName": "busy",
         "offDayName": "Weekend",
         "sourceTitle": "Busy hours (Beijing time):",
         "sourceWindows": "09:00–12:00 · 14:00–18:00",
-        "sourceNote": "API busy periods are weekdays 09:00–12:00 and 14:00–18:00 Beijing · Chat uses idle rates · legacy Flash and Vision requests progressively route to V4.1 Flash · the V4.1 Flash 10%-of-standard promotion begins Sep 12, 2026 at 10:00 Beijing · no published end date"
+        "sourceNote": "B.AI API and Chat promotion · V4.1 Flash is 10% of the standard reference price from Sep 12, 2026 10:00 until Sep 25, 2026 15:00 Beijing time, then 30% from Sep 25, 2026 15:00 · the 30% rate follows the applicable DeepSeek peak or off-peak reference price · Chinese public holidays are off-peak · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Busy rate",
+          "status": "Busy rate is active now",
+          "badge": "2× idle",
+          "detail": "2× the idle rate"
+        },
+        "offPeak": {
+          "name": "Idle rate",
+          "status": "Idle rate is active now",
+          "badge": "1× idle",
+          "detail": "Base rate"
+        },
+        "campaign10": {
+          "name": "Flash campaign · 10%",
+          "status": "B.AI Flash campaign rate is active now",
+          "badge": "0.1× standard",
+          "detail": "10% of B.AI's standard reference price until Sep 25 at 15:00 Beijing",
+          "tone": "special"
+        },
+        "campaign30": {
+          "name": "Flash campaign · 30%",
+          "status": "B.AI Flash campaign rate is active now",
+          "badge": "0.3× standard",
+          "detail": "30% of the applicable B.AI reference price from Sep 25 at 15:00 Beijing",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-deepseek-v4-pro",
+      "slug": "bai-v4-pro",
+      "provider": "B.AI",
+      "model": "DeepSeek V4 Pro",
+      "product": "API",
+      "shortName": "BAI",
+      "title": "B.AI DeepSeek Pro pricing clock",
+      "subtitle": "B.AI DeepSeek Pro hours in your local time",
+      "kicker": "V4 Pro · busy rates are 2× idle",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [1, 2, 3, 4, 5],
+        "peakWindows": [
+          { "start": "09:00", "end": "12:00" },
+          { "start": "14:00", "end": "18:00" }
+        ],
+        "publicHolidayDates": [
+          "2026-01-01", "2026-01-02", "2026-01-03",
+          "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
+          "2026-04-04", "2026-04-05", "2026-04-06",
+          "2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
+          "2026-06-19", "2026-06-20", "2026-06-21",
+          "2026-09-25", "2026-09-26", "2026-09-27",
+          "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"
+        ],
+        "publicHolidayName": "Chinese public holiday",
+        "publicHolidayTimeZone": "Asia/Shanghai",
+        "publicHolidaySource": "https://english.www.gov.cn/policies/featured/202511/04/content_WS6909c915c6d00ca5f9a074f7.html",
+        "windowName": "busy",
+        "offDayName": "Weekend",
+        "sourceTitle": "Busy hours (Beijing time):",
+        "sourceWindows": "09:00–12:00 · 14:00–18:00",
+        "sourceNote": "B.AI standard API rates · V4 Pro is 2× during weekday busy periods and idle on weekends/Chinese public holidays · current promotion list excludes V4 Pro · no published end date"
       },
       "periods": {
         "peak": {
@@ -120,7 +387,7 @@
         }
       },
       "source": "https://docs.b.ai/llmservice/pricing-and-usage/",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "zai-glm-5-3",
@@ -138,11 +405,26 @@
         "peakWindows": [
           { "start": "14:00", "end": "18:00" }
         ],
+        "overrides": [
+          {
+            "period": "promotion",
+            "startDate": "2026-09-25",
+            "endDate": "2026-10-07",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
         "windowName": "peak",
         "offDayName": "Weekend",
-        "sourceTitle": "Peak hours (Beijing time):",
+        "sourceTitle": "Peak hours (Singapore time):",
         "sourceWindows": "14:00–18:00",
-        "sourceNote": "Mon–Fri · every other hour counts half against your quota · no published end date"
+        "sourceNote": "All plans support GLM-5.3 · Monday–Friday, Singapore Standard Time (UTC+8) · every other hour counts half against your quota · all-day off-peak promotion runs Sep 25–Oct 7, 2026 · ZCode's usage docs confirm account-linked weekly and five-hour reset cards with expiry; a Reddit report claims four of each, but that quantity and an end date are not published in Z.ai's pricing docs, so this is not encoded as a rate · no published end date for the standard plan"
+      },
+      "accountBenefit": {
+        "text": "ZCode documents account-linked weekly and five-hour quota reset cards with expiry. A Reddit report claims four of each were issued, but Z.ai does not publish that quantity or an end date in its pricing docs; this is not a price multiplier.",
+        "source": "https://zcode.z.ai/en/docs/usage-stats"
       },
       "periods": {
         "peak": {
@@ -156,22 +438,28 @@
           "status": "Off-peak now: usage counts at half rate",
           "badge": "0.5×",
           "detail": "Counts at half rate"
+        },
+        "promotion": {
+          "name": "All-day off-peak",
+          "status": "All-day off-peak promotion is active now",
+          "badge": "0.5×",
+          "detail": "50% credit consumption during the published Sep 25–Oct 7 promotion",
+          "tone": "special"
         }
       },
       "source": "https://docs.z.ai/devpack/overview",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "zai-glm-5-3-flash",
       "slug": "zai-glm53-flash",
       "provider": "Z.ai",
       "model": "GLM-5.3-Flash",
-      "product": "Coding Plan usage campaign",
+      "product": "Coding Plan",
       "shortName": "GLM",
-      "temporary": true,
-      "title": "GLM-5.3-Flash campaign clock",
-      "subtitle": "Z.ai Coding Plan campaign hours in your local time",
-      "kicker": "Usage campaign · September 3–20, 2026",
+      "title": "GLM-5.3-Flash off-peak clock",
+      "subtitle": "Z.ai Coding Plan quota hours in your local time",
+      "kicker": "Coding Plan · off-peak hours count half against your quota",
       "schedule": {
         "timeZone": "Asia/Shanghai",
         "peakDays": [1, 2, 3, 4, 5],
@@ -182,18 +470,31 @@
           {
             "period": "campaign",
             "startDate": "2026-09-03",
-            "endDate": "2026-09-20",
+            "endDate": "2026-10-07",
             "days": [0, 1, 2, 3, 4, 5, 6],
             "windows": [
               { "start": "23:00", "end": "09:00" }
+            ]
+          },
+          {
+            "period": "promotion",
+            "startDate": "2026-09-25",
+            "endDate": "2026-10-07",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
             ]
           }
         ],
         "windowName": "peak",
         "offDayName": "Weekend",
-        "sourceTitle": "Peak / campaign (Singapore):",
-        "sourceWindows": "Peak 14:00–18:00 weekdays · campaign 23:00–09:00 daily",
-        "sourceNote": "Campaign Sep 3–20, 2026 · paid plans · ZCode 3.10+ uses no quota; other supported agents receive double quota"
+        "sourceTitle": "Peak hours (Singapore time):",
+        "sourceWindows": "14:00–18:00 weekdays",
+        "sourceNote": "All plans support GLM-5.3-Flash · Monday–Friday peak hours are 14:00–18:00 Singapore Standard Time (UTC+8) · off-peak usage is charged at 50% of the standard credit rate · paid-plan Flash campaign runs daily 23:00–09:00 from Sep 3 through Oct 7, 2026 (ZCode unlimited, other agents 2× quota) · all-day off-peak promotion runs Sep 25–Oct 7, 2026 · ZCode's usage docs confirm account-linked weekly and five-hour reset cards with expiry; a Reddit report claims four of each, but that quantity and an end date are not published in Z.ai's pricing docs, so this is not encoded as a rate · no published end date for the standard plan"
+      },
+      "accountBenefit": {
+        "text": "ZCode documents account-linked weekly and five-hour quota reset cards with expiry. A Reddit report claims four of each were issued, but Z.ai does not publish that quantity or an end date in its pricing docs; this is not a price multiplier.",
+        "source": "https://zcode.z.ai/en/docs/usage-stats"
       },
       "periods": {
         "peak": {
@@ -209,27 +510,34 @@
           "detail": "Counts at half rate"
         },
         "campaign": {
-          "name": "Campaign hours",
-          "status": "GLM-5.3-Flash campaign hours are active now",
+          "name": "Flash usage campaign",
+          "status": "GLM-5.3-Flash campaign window is active now",
           "badge": "Campaign",
-          "detail": "ZCode: no quota used · other agents: half rate",
+          "detail": "ZCode unlimited usage; other agents receive 2× quota",
+          "tone": "special"
+        },
+        "promotion": {
+          "name": "All-day off-peak",
+          "status": "All-day off-peak promotion is active now",
+          "badge": "0.5×",
+          "detail": "50% credit consumption during the published Sep 25–Oct 7 promotion",
           "tone": "special"
         }
       },
-      "source": "https://docs.b.ai/llmservice/pricing-and-usage/",
-      "verifiedAt": "2026-09-11"
+      "source": "https://docs.z.ai/devpack/overview",
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "alibaba-qwen3-8-max",
       "slug": "alibaba",
       "provider": "Alibaba Cloud",
-      "model": "Qwen3.8 Max + DeepSeek V4 Pro 0813 / Flash 0731",
+      "model": "Qwen3.8 Max / Qwen3.8 Flash",
       "product": "Personal Token Plan",
       "shortName": "QW",
       "temporary": true,
-      "title": "Alibaba Token Plan night-rate clock",
-      "subtitle": "Qwen and DeepSeek plan credits in your local time",
-      "kicker": "Token Plan night pricing · 50% fewer credits off-peak",
+      "title": "Alibaba Qwen night-rate clock",
+      "subtitle": "Qwen Token Plan credits in your local time",
+      "kicker": "Qwen3.8 night pricing · 60% fewer Credits off-peak",
       "schedule": {
         "timeZone": "Asia/Shanghai",
         "peakDays": [0, 1, 2, 3, 4, 5, 6],
@@ -239,7 +547,44 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–22:00",
-        "sourceNote": "Coding/agent tools only · Qwen3.8 Max, DeepSeek V4 Pro 0813 and V4 Flash 0731 · 50% discount 22:00–08:00 · no published end date"
+        "sourceNote": "China Beijing Token Plan coding/agent tools only · current official overview lists qwen3.8-max and qwen3.8-flash, but does not republish the older 22:00–08:00 UTC+8 coefficient here, so the displayed timing remains unverified · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard credits",
+          "status": "Standard credit rate is active now",
+          "badge": "1× credits"
+        },
+        "offPeak": {
+          "name": "Night discount",
+          "status": "Nightly 60% credit discount is active now",
+          "badge": "0.4× credits"
+        }
+      },
+      "source": "https://help.aliyun.com/en/model-studio/token-plan-personal-overview",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "alibaba-deepseek-v4-token-plan",
+      "slug": "alibaba-deepseek",
+      "provider": "Alibaba Cloud",
+      "model": "DeepSeek V4.1 Flash / V4 Pro 0813 / V4 Flash 0731",
+      "product": "Personal Token Plan",
+      "shortName": "DS",
+      "temporary": true,
+      "title": "Alibaba DeepSeek night-rate clock",
+      "subtitle": "DeepSeek Token Plan credits in your local time",
+      "kicker": "DeepSeek night pricing · 50% fewer Credits off-peak",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "08:00", "end": "22:00" }
+        ],
+        "windowName": "standard-rate",
+        "sourceTitle": "Standard-rate hours (Beijing):",
+        "sourceWindows": "08:00–22:00",
+        "sourceNote": "China Beijing Token Plan coding/agent tools only · current official overview lists deepseek-v4-pro-0813, deepseek-v4-flash-0731 and deepseek-v4.1-flash, but does not republish the older 22:00–08:00 UTC+8 coefficient here, so the displayed timing remains unverified · no published effective or end date"
       },
       "periods": {
         "peak": {
@@ -254,13 +599,13 @@
         }
       },
       "source": "https://help.aliyun.com/en/model-studio/token-plan-personal-overview",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "xiaomi-mimo-v2-5-token-plan",
       "slug": "mimo",
       "provider": "Xiaomi MiMo",
-      "model": "MiMo V2.5 Token Plan",
+      "model": "MiMo V2.6 Pro / V2.6 Flash (V2.5 ends Oct 21)",
       "product": "Token Plan",
       "shortName": "MI",
       "title": "MiMo night-rate clock",
@@ -275,7 +620,7 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–00:00",
-        "sourceNote": "Token Plan language models · 20% fewer Credits 00:00–08:00 · no published end date"
+        "sourceNote": "Token Plan V2.6 Pro/Flash · 20% fewer Credits 00:00–08:00 Beijing (UTC+8) · official deprecation notice ends mimo-v2.5-pro and mimo-v2.5 on Oct 21, 2026 at 10:00 Beijing time · no published end date for the night discount"
       },
       "periods": {
         "peak": {
@@ -289,8 +634,8 @@
           "badge": "0.8× credits"
         }
       },
-      "source": "https://mimo.mi.com/docs/en-US/updates/feature/platform",
-      "verifiedAt": "2026-09-11"
+      "source": "https://mimo.mi.com/docs/en-US/tokenplan/Token%20Plan/team",
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "qoder-qwen3-7-max",
@@ -312,7 +657,7 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–22:00",
-        "sourceNote": "Daily · promotion effective Jun 23, 2026 · end date to be announced"
+        "sourceNote": "Pro Trial and paying users · daily, including weekends/public holidays · promotion effective Jun 23, 2026 · no published end date"
       },
       "periods": {
         "peak": {
@@ -327,7 +672,7 @@
         }
       },
       "source": "https://docs.qoder.cn/en/product-overview/qwen-3-7-series-model-staggering-discount",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "qoder-qwen3-8-max",
@@ -349,7 +694,7 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–22:00",
-        "sourceNote": "Daily · 60% off effective Sep 4, 2026 at 22:00 · end date to be announced"
+        "sourceNote": "Pro Trial and paying users · daily, including weekends/public holidays · 60% off effective Sep 4, 2026 at 22:00 Beijing · no published end date"
       },
       "periods": {
         "peak": {
@@ -364,7 +709,7 @@
         }
       },
       "source": "https://docs.qoder.cn/en/product-overview/qwen-3-7-series-model-staggering-discount",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "qoder-qwen3-8-flash",
@@ -386,7 +731,18 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–22:00",
-        "sourceNote": "Daily · 60% off effective Sep 4, 2026 at 22:00 · end date to be announced"
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-18T10:00:00+08:00",
+            "endAt": "2026-10-01T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "Daily standard/off-peak coefficients remain 0.1×/0.04× outside the campaign · Qwen3.8-Flash free campaign starts Sep 18, 2026 10:00 Beijing and ends Sep 30, 2026 23:59:59 Beijing · personal users only, enterprise excluded · after the campaign the then-published coefficient applies"
       },
       "periods": {
         "peak": {
@@ -398,10 +754,17 @@
           "name": "Promo off-peak rate",
           "status": "Discounted 0.04× credit rate is active now",
           "badge": "0.04× credits"
+        },
+        "campaign": {
+          "name": "Free campaign",
+          "status": "Qwen3.8-Flash free campaign is active now",
+          "badge": "0× credits",
+          "detail": "No Credits consumed during the published campaign",
+          "tone": "special"
         }
       },
-      "source": "https://docs.qoder.cn/en/product-overview/qwen-3-7-series-model-staggering-discount",
-      "verifiedAt": "2026-09-11"
+      "source": "https://docs.qoder.cn/events/flashoffer",
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "qoder-qwen3-7-plus",
@@ -423,7 +786,7 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Beijing):",
         "sourceWindows": "08:00–22:00",
-        "sourceNote": "Daily · promotion effective Jun 23, 2026 · end date to be announced"
+        "sourceNote": "Pro Trial and paying users · daily, including weekends/public holidays · promotion effective Jun 23, 2026 · no published end date"
       },
       "periods": {
         "peak": {
@@ -438,18 +801,18 @@
         }
       },
       "source": "https://docs.qoder.cn/en/product-overview/qwen-3-7-series-model-staggering-discount",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "tencent-deepseek-v4-vendor-direct",
       "slug": "tencent",
       "provider": "Tencent Cloud",
-      "model": "DeepSeek V4 Flash / Pro / Vision (Vendor Direct)",
+      "model": "DeepSeek V4.1 Flash / V4 Flash 0731 / Pro 0813 / Vision (Vendor Direct)",
       "product": "TokenHub Enterprise Pro Plan",
       "shortName": "TC",
       "title": "Tencent TokenHub vendor-direct clock",
       "subtitle": "Vendor-direct DeepSeek V4 credit rates in your local time",
-      "kicker": "Flash, Pro and Vision · 2× during weekday peak",
+      "kicker": "V4.1 Flash, Flash, Pro and Vision · 2× during weekday peak",
       "schedule": {
         "timeZone": "Asia/Shanghai",
         "peakDays": [1, 2, 3, 4, 5],
@@ -461,7 +824,7 @@
         "offDayName": "Weekend",
         "sourceTitle": "Peak windows (Beijing):",
         "sourceWindows": "09:00–12:00 · 14:00–18:00",
-        "sourceNote": "Vendor-direct Flash 0731, Pro 0813 and Flash Vision Exp · Monday–Friday · weekends all off-peak · effective Aug 29, 2026 · no published end date"
+        "sourceNote": "Vendor-direct V4.1 Flash, Flash 0731, Pro 0813 and Flash Vision Exp · weekday peak, weekends all off-peak · effective Aug 29, 2026 · Tencent does not state a Chinese-public-holiday exception · no published end date"
       },
       "periods": {
         "peak": {
@@ -476,7 +839,7 @@
         }
       },
       "source": "https://www-sg.tencentcloud.com/document/product/1300/81489",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "tencent-deepseek-v4-ga",
@@ -513,7 +876,7 @@
         }
       },
       "source": "https://www-sg.tencentcloud.com/document/product/1300/81489",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
     },
     {
       "id": "swarms-swarm-completions",
@@ -534,7 +897,7 @@
         "windowName": "standard-rate",
         "sourceTitle": "Standard-rate hours (Pacific Time):",
         "sourceWindows": "06:00–20:00",
-        "sourceNote": "Daily · Swarm Completions token costs only · agent costs unchanged · discount applies automatically · no published effective date or end date"
+        "sourceNote": "Daily 20:00–06:00 Pacific Time · official pricing page states 50% off token costs for Swarm Completions only · agent costs unchanged · no published effective date or end date"
       },
       "periods": {
         "peak": {
@@ -551,7 +914,474 @@
         }
       },
       "source": "https://docs.swarms.ai/docs/documentation/resources/pricing",
-      "verifiedAt": "2026-09-11"
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "baidu-qianfan-deepseek-v4",
+      "slug": "baidu-qianfan-deepseek",
+      "provider": "Baidu Qianfan",
+      "model": "DeepSeek V4.1 Flash + V4 Pro 0813",
+      "product": "Qianfan API campaign",
+      "shortName": "BD",
+      "temporary": true,
+      "title": "Baidu Qianfan DeepSeek campaign clock",
+      "subtitle": "Qianfan National Day campaign rates in your local time",
+      "kicker": "DeepSeek V4 · limited-time 40% off busy and idle rates",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "08:00", "end": "22:00" }
+        ],
+        "windowName": "busy",
+        "offDayName": "Weekend",
+        "sourceTitle": "Busy hours (Beijing time):",
+        "sourceWindows": "08:00–22:00",
+        "overrides": [
+          {
+            "period": "campaignBusy",
+            "startAt": "2026-09-24T00:00:00+08:00",
+            "endAt": "2026-10-08T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "08:00", "end": "22:00" }
+            ]
+          },
+          {
+            "period": "campaignIdle",
+            "startAt": "2026-09-24T00:00:00+08:00",
+            "endAt": "2026-10-08T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "22:00", "end": "08:00" }
+            ]
+          }
+        ],
+        "sourceNote": "Official Baidu Qianfan campaign lists DeepSeek V4.1 Flash and V4 Pro 0813 at 0.6× of the original busy and idle prices · busy 08:00–22:00 and idle 22:00–08:00 Beijing time · campaign runs Sep 24, 2026 00:00 through Oct 7, 2026 23:59 Beijing time, then original prices return · public-holiday treatment is not stated · published end date: 2026-10-07 23:59 Beijing"
+      },
+      "periods": {
+        "peak": {
+          "name": "Busy reference rate",
+          "status": "Busy reference rate is active now",
+          "badge": "2× idle",
+          "detail": "Original busy reference rate"
+        },
+        "offPeak": {
+          "name": "Idle reference rate",
+          "status": "Idle reference rate is active now",
+          "badge": "1× idle",
+          "detail": "Original idle reference rate"
+        },
+        "campaignBusy": {
+          "name": "Campaign · busy",
+          "status": "Baidu campaign rate is active now",
+          "badge": "0.6× base",
+          "detail": "40% off the busy reference rate through Oct 7",
+          "tone": "special"
+        },
+        "campaignIdle": {
+          "name": "Campaign · idle",
+          "status": "Baidu campaign rate is active now",
+          "badge": "0.6× base",
+          "detail": "40% off the idle reference rate through Oct 7",
+          "tone": "special"
+        }
+      },
+      "source": "https://cloud.baidu.com/product/qianfan_home/campaign.html?track=home_banner",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "baidu-qianfan-glm53",
+      "slug": "baidu-qianfan-glm53",
+      "provider": "Baidu Qianfan",
+      "model": "GLM 5.3",
+      "product": "Qianfan API campaign",
+      "shortName": "BD",
+      "temporary": true,
+      "title": "Baidu Qianfan GLM 5.3 campaign clock",
+      "subtitle": "Qianfan National Day campaign rates in your local time",
+      "kicker": "GLM 5.3 · limited-time 40% off all day",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "standard-rate",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-24T00:00:00+08:00",
+            "endAt": "2026-10-08T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "Official Baidu Qianfan campaign lists GLM 5.3 at 0.6× of the original list price all day · campaign runs Sep 24, 2026 00:00 through Oct 7, 2026 23:59 Beijing time, then original prices return · published end date: 2026-10-07 23:59 Beijing"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "Original list-price reference"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "Original list-price reference"
+        },
+        "campaign": {
+          "name": "Campaign · all day",
+          "status": "Baidu campaign rate is active now",
+          "badge": "0.6× base",
+          "detail": "40% off the list price through Oct 7",
+          "tone": "special"
+        }
+      },
+      "source": "https://cloud.baidu.com/product/qianfan_home/campaign.html?track=home_banner",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-mimo26-flash",
+      "slug": "bai-mimo26-flash",
+      "provider": "B.AI",
+      "model": "MiMo-V2.6-Flash",
+      "product": "API / Chat promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI MiMo Flash campaign clock",
+      "subtitle": "B.AI MiMo campaign rates in your local time",
+      "kicker": "MiMo-V2.6-Flash · 90% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible MiMo-V2.6-Flash usage through its API and Chat is billed at 10% of the standard reference price from Sep 25, 2026 15:00 Beijing · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 10%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.1× base",
+          "detail": "90% off the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-glm53-flash",
+      "slug": "bai-glm53-flash",
+      "provider": "B.AI",
+      "model": "GLM-5.3-Flash",
+      "product": "API / Chat promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI GLM Flash campaign clock",
+      "subtitle": "B.AI GLM campaign rates in your local time",
+      "kicker": "GLM-5.3-Flash · 70% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible GLM-5.3-Flash usage through its API and Chat is billed at 30% of the standard reference price from Sep 25, 2026 15:00 Beijing · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 30%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.3× base",
+          "detail": "70% off the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-qwen38-flash",
+      "slug": "bai-qwen38-flash",
+      "provider": "B.AI",
+      "model": "Qwen3.8-Flash",
+      "product": "API / Chat promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI Qwen Flash campaign clock",
+      "subtitle": "B.AI Qwen campaign rates in your local time",
+      "kicker": "Qwen3.8-Flash · 70% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible Qwen3.8-Flash usage through its API and Chat is billed at 30% of the standard reference price from Sep 25, 2026 15:00 Beijing · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 30%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.3× base",
+          "detail": "70% off the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-mimo26-pro",
+      "slug": "bai-mimo26-pro",
+      "provider": "B.AI",
+      "model": "MiMo-V2.6-Pro",
+      "product": "API / Chat promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI MiMo Pro campaign clock",
+      "subtitle": "B.AI MiMo campaign rates in your local time",
+      "kicker": "MiMo-V2.6-Pro · 50% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-09-25T15:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible MiMo-V2.6-Pro usage is billed at 50% of the standard reference price from Sep 25, 2026 15:00 Beijing · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 50%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.5× base",
+          "detail": "50% of the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-glm52",
+      "slug": "bai-glm52",
+      "provider": "B.AI",
+      "model": "GLM-5.2",
+      "product": "API / web app promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI GLM-5.2 campaign clock",
+      "subtitle": "B.AI GLM campaign rates in your local time",
+      "kicker": "GLM-5.2 · 40% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-08-12T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible GLM-5.2 requests through its API and web app are billed at 60% of the standard reference price from Aug 12, 2026 · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 60%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.6× base",
+          "detail": "40% off the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
+    },
+    {
+      "id": "bai-glm53",
+      "slug": "bai-glm53",
+      "provider": "B.AI",
+      "model": "GLM-5.3",
+      "product": "API / web app promotion",
+      "shortName": "BAI",
+      "temporary": true,
+      "title": "B.AI GLM-5.3 campaign clock",
+      "subtitle": "B.AI GLM campaign rates in your local time",
+      "kicker": "GLM-5.3 · 10% promotional discount",
+      "schedule": {
+        "timeZone": "Asia/Shanghai",
+        "peakDays": [0, 1, 2, 3, 4, 5, 6],
+        "peakWindows": [
+          { "start": "00:00", "end": "00:00", "allDay": true }
+        ],
+        "windowName": "campaign",
+        "sourceTitle": "Campaign hours (Beijing time):",
+        "sourceWindows": "All day",
+        "overrides": [
+          {
+            "period": "campaign",
+            "startAt": "2026-08-14T00:00:00+08:00",
+            "days": [0, 1, 2, 3, 4, 5, 6],
+            "windows": [
+              { "start": "00:00", "end": "00:00", "allDay": true }
+            ]
+          }
+        ],
+        "sourceNote": "B.AI says eligible GLM-5.3 requests through its API and web app are billed at 90% of the standard reference price from Aug 14, 2026 · offer period and final settlement remain subject to the platform display · no published end date"
+      },
+      "periods": {
+        "peak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "offPeak": {
+          "name": "Standard reference rate",
+          "status": "Standard reference rate is active now",
+          "badge": "1× base",
+          "detail": "B.AI standard reference price"
+        },
+        "campaign": {
+          "name": "Campaign · 90%",
+          "status": "B.AI campaign rate is active now",
+          "badge": "0.9× base",
+          "detail": "10% off the standard reference price",
+          "tone": "special"
+        }
+      },
+      "source": "https://docs.b.ai/llmservice/promotions-and-pricing-notices/",
+      "verifiedAt": "2026-09-28"
     }
   ]
 }

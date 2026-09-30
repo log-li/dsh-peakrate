@@ -4,7 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - 2026-09-30
+
+### Fixed
+
+- **Promotions and campaigns are now honoured.** The data source expresses limited-time pricing in several shapes (period names such as `promotion` / `campaign10`, plus all-day windows). The plugin recognised only one of them and silently dropped the rest, so a promotion covering a whole day could still be shown at the peak rate. Each activity now carries its own multiplier, and all-day windows are expanded correctly.
+- **Public holidays are now billed as off-peak.** The data source has always published holiday dates, but the plugin dropped them while parsing, so a holiday landing on a weekday was shown as **peak** while the upstream charged the off-peak rate for the whole day. Holidays now override the regular weekday and window rules; nothing is hard-coded — both the holiday dates and the peak windows come from the data source, so upstream changes take effect on the next refresh.
+- **DSH's *DeepSeek Account* provider now shows peak/off-peak rates.** It shares its adapter, model catalog and billing with `deepseek-official` (only the authentication differs), so it maps to the same rate profile. Previously it showed nothing at all.
+- **The hover card no longer has a transparent background**, so its detail text stays readable when it overlaps the composer. It now uses the same surface token as the official hover-card primitive.
+
+### Changed
+
+- **The bundled offline snapshot was re-synced from the data source** (the previous copy was dated 2026-09-11). First installs and offline runs now see the current profile set, including holiday data.
 
 ## [0.3.0] - 2026-09-26
 
@@ -78,7 +89,18 @@ First public release.
 
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)， 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.1] - 2026-09-30
+
+### 修复
+
+- **促销与活动价现在会被正确识别。** 数据源用多种形态表达限时定价（`promotion` / `campaign10` 这类 period 名，加上「全天」窗口）。插件只认其中一种、其余静默丢弃 —— 于是覆盖整天的促销仍可能显示成峰价。现在每个活动带自己的倍率，全天窗口也正确展开。
+- **法定节假日现在按谷价计。** 数据源一直带着节假日日期，但插件在解析时把它丢弃了 —— 于是落在**工作日**的节假日会显示为**峰价**，而上游当天全天按谷价计费。现在节假日会压过常规的星期/窗口规则；插件内**不含任何硬编码日期**，峰谷时刻与节假日都来自数据源，上游改动后下次刷新即生效。
+- **DSH 的「DeepSeek 账号」provider 现在会显示峰谷倍率。** 它与 `deepseek-official` 同适配器、同模型目录、同计费源（只有鉴权方式不同），因此映射到同一个费率 profile；此前它什么都不显示。
+- **悬停卡片不再背景透明**，压在 composer 上时详情文字仍可读。改用与官方 hover 卡片原语相同的浮层底色 token。
+
+### 变更
+
+- **内置离线快照已重新从数据源同步**（旧副本是 2026-09-11 的）。首次安装与离线运行现在能看到当前的 profile 集合，含节假日数据。
 
 ## [0.3.0] - 2026-09-26
 

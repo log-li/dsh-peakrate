@@ -304,8 +304,20 @@
 /* ============ 5) 自绘悬停卡片（替代原生 title） ============
  * 复用 .dsh-peakrate-ms-menu 的整体观感（圆角卡片 / 阴影 / 菜单底色），
  * 只覆盖内边距与尺寸约束 —— 详情是纯文本块，不需要菜单的限高与滚动。
+ *
+ * 2026-09-30 修：**必须自己给 background**。原先注释假设「底色」会从 ms-menu 继承，
+ * 但实测官方 `dsh-client-ui-model-selection` 的 menu 规则里**并没有 background**
+ * （逐字段核对：z-index / --dsw-elevation-stroke-color / width / min-max-width /
+ * max-height / box-shadow / color / 两个滚动条变量，无 background）—— 于是悬停卡
+ * 背景透明，压在 composer 文字上完全读不清（用户实测截图）。
+ * 取 `--dsw-specific-menu`：这正是官方 **HoverCard 原语**
+ * （`dsh-client-ui-primitives/HoverCard.module.css`）用的同一条，也是官方各浮层
+ * （chat panel / jobs menu / schedule menu / conversation panel）的通用浮层底。
+ * macOS 下该 token 解析为 94% 不透明（light `#f8f9faf0` / dark `#303136f0`），可读。
+ * 注意：不改 ms-menu —— 那是 fork 自官方的选择器，保持视觉一致。
  */
 .dsh-peakrate-hover {
+  background: var(--dsw-specific-menu);
   min-width: min(200px, 100vw - 32px);
   max-width: min(360px, 100vw - 32px);
   max-height: none;
