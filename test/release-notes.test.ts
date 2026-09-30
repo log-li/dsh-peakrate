@@ -30,7 +30,7 @@ describe('★ release notes 抽取', () => {
     expect(notes).not.toBe('')
     const parts = notes.split('\n\n---\n\n')
     expect(parts, '应恰好分成中英两段').toHaveLength(2)
-    const [en, zh] = parts
+    const [en = '', zh = ''] = parts
     expect(en.trim(), '英文半区为空').not.toBe('')
     expect(zh.trim(), '中文半区为空 —— 改了英文却忘了中文？').not.toBe('')
     // 中文半区必须**真的含中文**，而不是一份英文复制
